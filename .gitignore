@@ -27,3 +27,28 @@ doc/api/
 
 .flutter-plugins
 .flutter-plugins-dependencies
+
+# === 읽다남김 프로젝트 추가 무시 규칙 ===
+
+# 환경 변수 (API 키 일체) — STEP 4에서 생성
+.env
+.env.*
+!.env.example
+
+# Firebase 설정 파일 (프로젝트별 비공개)
+**/google-services.json
+**/GoogleService-Info.plist
+lib/firebase_options.dart
+
+# 빌드 산출물 (Dart 템플릿에 일부 포함되나 명시)
+/build/
+.dart_tool/
+
+# IDE
+.idea/
+*.iml
+.vscode/settings.json
+
+# 로컬 환경 의존
+android/local.properties
+ios/Flutter/flutter_export_environment.sh
