@@ -36,9 +36,7 @@ doc/api/
 !.env.example
 
 # Firebase 설정 파일 (프로젝트별 비공개)
-**/google-services.json
 **/GoogleService-Info.plist
-lib/firebase_options.dart
 
 # 빌드 산출물 (Dart 템플릿에 일부 포함되나 명시)
 /build/
