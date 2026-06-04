@@ -20,6 +20,7 @@ analyzer:
   exclude:
     - "**/*.g.dart"
     - "**/*.freezed.dart"
+    - "lib/main_preview.dart"
 
   errors:
     missing_required_param: error
