@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "382439857148",
+    "project_id": "read-and-keep",
+    "storage_bucket": "read-and-keep.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:382439857148:android:2523cf9269a54f6ca2b079",
+        "android_client_info": {
+          "package_name": "com.gangbuk.read_and_keep"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCLnBIbp3DmIF_uJiZFQDZXlL_4Z6ZLqVM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
