@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/theme/app_theme.dart';
 
 /// 앱 루트 위젯.
 ///
@@ -12,10 +13,7 @@ class ReadAndKeepApp extends StatelessWidget {
     return MaterialApp(
       title: '읽다남김',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.brown),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.light,
       home: const _SetupPlaceholderHome(),
     );
   }
