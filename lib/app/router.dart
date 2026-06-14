@@ -8,6 +8,8 @@ import '../features/auth/domain/auth_providers.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/password_reset_screen.dart';
 import '../features/auth/presentation/signup_screen.dart';
+import '../features/books/presentation/book_detail_screen.dart';
+import '../features/books/presentation/book_select_screen.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/recommendation/presentation/recommend_screen.dart';
 import '../features/trend/presentation/trend_screen.dart';
@@ -73,6 +75,20 @@ GoRouter router(Ref ref) {
               GoRoute(
                 path: AppRoutes.home,
                 builder: (context, state) => const HomeScreen(),
+                // 책 선택/상세는 홈 브랜치 하위에 두어 탭바를 유지한다.
+                // 중첩 라우트 path 는 슬래시 없는 상대경로로 둔다.
+                routes: [
+                  GoRoute(
+                    path: 'book-select',
+                    builder: (context, state) => const BookSelectScreen(),
+                  ),
+                  GoRoute(
+                    path: 'book-detail/:bookId',
+                    builder: (context, state) => BookDetailScreen(
+                      bookId: state.pathParameters['bookId']!,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

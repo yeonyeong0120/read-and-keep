@@ -24,4 +24,15 @@ abstract final class AppRoutes {
 
   /// 트렌드 탭 (TR).
   static const String trend = '/trend';
+
+  // --- 책 관리 (BK) ---
+
+  /// 책 선택 화면 (BK-001). 홈 브랜치 하위(탭바 유지).
+  static const String bookSelect = '/book-select';
+
+  /// 책 상세 화면 (BK-004). 실제 GoRoute path 는 '/book-detail/:bookId'.
+  static const String bookDetail = '/book-detail';
+
+  /// 특정 책 상세 경로를 만든다.
+  static String bookDetailOf(String bookId) => '$bookDetail/$bookId';
 }

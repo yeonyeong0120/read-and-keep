@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -48,9 +50,7 @@ class HomeScreen extends ConsumerWidget {
               const _AddCaptureHint(),
               const SizedBox(height: AppSpacing.md),
               _AddCaptureButton(
-                onPressed: () {
-                  // TODO(BK-001): 책 선택 화면으로 라우팅(문장 추가 진입).
-                },
+                onPressed: () => context.go(AppRoutes.bookSelect),
               ),
               const SizedBox(height: AppSpacing.xl),
             ],
