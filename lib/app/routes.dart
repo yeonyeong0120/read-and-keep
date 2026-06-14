@@ -14,6 +14,14 @@ abstract final class AppRoutes {
   /// 비밀번호 재설정 화면 (CM-004).
   static const String passwordReset = '/password-reset';
 
-  /// 홈 화면 (STEP 6에서 구현). 인증된 사용자의 기본 진입점.
+  // --- 메인 탭 (하단 네비게이션 셸) ---
+
+  /// 홈 탭 (MN). 인증된 사용자의 기본 진입점.
   static const String home = '/';
+
+  /// 추천 탭 (RC).
+  static const String recommend = '/recommend';
+
+  /// 트렌드 탭 (TR).
+  static const String trend = '/trend';
 }

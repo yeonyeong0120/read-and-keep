@@ -3,14 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import '../core/theme/app_spacing.dart';
-import '../core/theme/app_text_styles.dart';
 import '../features/auth/data/models/app_user.dart';
 import '../features/auth/domain/auth_providers.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/password_reset_screen.dart';
 import '../features/auth/presentation/signup_screen.dart';
+import '../features/home/presentation/home_screen.dart';
+import '../features/recommendation/presentation/recommend_screen.dart';
+import '../features/trend/presentation/trend_screen.dart';
 import 'routes.dart';
+import 'widgets/main_shell.dart';
 
 part 'router.g.dart';
 
@@ -48,6 +50,7 @@ GoRouter router(Ref ref) {
       return null;
     },
     routes: [
+      // 인증 화면은 탭바 비노출이므로 셸 바깥 최상위에 둔다.
       GoRoute(
         path: AppRoutes.login,
         builder: (context, state) => const LoginScreen(),
@@ -60,9 +63,36 @@ GoRouter router(Ref ref) {
         path: AppRoutes.passwordReset,
         builder: (context, state) => const PasswordResetScreen(),
       ),
-      GoRoute(
-        path: AppRoutes.home,
-        builder: (context, state) => const _HomePlaceholder(),
+      // 메인 탭 셸: 홈/추천/트렌드 3개 브랜치를 IndexedStack 으로 유지한다.
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) =>
+            MainShell(navigationShell: navigationShell),
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.home,
+                builder: (context, state) => const HomeScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.recommend,
+                builder: (context, state) => const RecommendScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.trend,
+                builder: (context, state) => const TrendScreen(),
+              ),
+            ],
+          ),
+        ],
       ),
     ],
   );
@@ -86,30 +116,5 @@ class _RouterRefreshNotifier extends ChangeNotifier {
   void dispose() {
     _subscription.close();
     super.dispose();
-  }
-}
-
-/// 홈 화면 임시 자리표시. STEP 6 에서 실제 홈으로 대체한다.
-class _HomePlaceholder extends ConsumerWidget {
-  const _HomePlaceholder();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('홈')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('홈은 STEP 6에서 구현', style: AppTextStyles.body),
-            const SizedBox(height: AppSpacing.lg),
-            FilledButton(
-              onPressed: () => ref.read(authProvider.notifier).signOut(),
-              child: const Text('로그아웃'),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
