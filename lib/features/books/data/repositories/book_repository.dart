@@ -85,6 +85,16 @@ class BookRepository {
     return Book.fromFirestore(doc);
   }
 
+  /// 단일 책 스트림(BK-004 책 상세용). 문서가 사라지면 [StateError] 를 방출한다.
+  Stream<Book> watchBook(String bookId) {
+    return _booksRef.doc(bookId).snapshots().map((doc) {
+      if (!doc.exists) {
+        throw StateError('Book $bookId not found');
+      }
+      return Book.fromFirestore(doc);
+    });
+  }
+
   /// 카카오 검색 결과를 책장에 등록한다.
   ///
   /// isbn13 으로 동일 책이 이미 있으면 중복 등록하지 않고, 그 책의
