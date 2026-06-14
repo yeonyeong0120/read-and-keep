@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +12,8 @@ import '../../../core/theme/app_text_styles.dart';
 import '../data/models/book.dart';
 import '../data/models/kakao_book.dart';
 import '../domain/book_providers.dart';
+import 'widgets/book_cover.dart';
+import 'widgets/book_relative_time.dart';
 
 /// BK-001 책 선택 화면.
 ///
@@ -177,7 +178,7 @@ class _BookshelfContent extends ConsumerWidget {
             const SizedBox(height: AppSpacing.md),
             _BookCard(
               book: recent,
-              metaText: '최근 기록 ${_relativeTime(recent.lastSelectedAt)}',
+              metaText: '최근 기록 ${bookRelativeTime(recent.lastSelectedAt)}',
               onSelect: () => onSelect(recent),
             ),
             const SizedBox(height: AppSpacing.xl),
@@ -271,7 +272,7 @@ class _BookCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _BookCover(url: book.coverUrl),
+          BookCover(url: book.coverUrl),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -328,7 +329,7 @@ class _KakaoCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _BookCover(url: kakaoBook.thumbnail),
+          BookCover(url: kakaoBook.thumbnail),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -362,57 +363,6 @@ class _KakaoCard extends StatelessWidget {
           const SizedBox(width: AppSpacing.md),
           _SelectButton(onPressed: onSelect),
         ],
-      ),
-    );
-  }
-}
-
-/// 책 표지. 없거나 로드 실패 시 placeholder 박스로 대체한다.
-class _BookCover extends StatelessWidget {
-  const _BookCover({required this.url});
-
-  final String url;
-
-  static const double _width = 48;
-  static const double _height = 64;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: AppRadius.smRadius,
-      child: url.isEmpty
-          ? const _CoverPlaceholder(width: _width, height: _height)
-          : CachedNetworkImage(
-              imageUrl: url,
-              width: _width,
-              height: _height,
-              fit: BoxFit.cover,
-              placeholder: (context, _) =>
-                  const _CoverPlaceholder(width: _width, height: _height),
-              errorWidget: (context, _, _) =>
-                  const _CoverPlaceholder(width: _width, height: _height),
-            ),
-    );
-  }
-}
-
-/// 표지 placeholder.
-class _CoverPlaceholder extends StatelessWidget {
-  const _CoverPlaceholder({required this.width, required this.height});
-
-  final double width;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: height,
-      color: AppColors.surfaceVariant,
-      child: const Icon(
-        Icons.menu_book_rounded,
-        size: 24,
-        color: AppColors.textSecondary,
       ),
     );
   }
@@ -533,13 +483,4 @@ class _BottomNotice extends StatelessWidget {
 String _yearOf(String datetime) {
   if (datetime.length < 4) return '';
   return datetime.substring(0, 4);
-}
-
-/// 과거 시각을 상대 표현으로 바꾼다.
-String _relativeTime(DateTime time) {
-  final diff = DateTime.now().difference(time);
-  if (diff.inDays >= 1) return '${diff.inDays}일 전';
-  if (diff.inHours >= 1) return '${diff.inHours}시간 전';
-  if (diff.inMinutes >= 1) return '${diff.inMinutes}분 전';
-  return '방금 전';
 }

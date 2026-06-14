@@ -75,8 +75,12 @@ class BookActionNotifier extends _$BookActionNotifier {
     final result = await AsyncValue.guard(() async {
       added = await ref.read(bookRepositoryProvider).addBookFromKakao(kakaoBook);
     });
-    if (!ref.mounted) return null;
-    state = result;
+    // 본 Notifier 는 autoDispose 라 await 사이에 dispose 될 수 있다. 그 경우에도
+    // 등록 결과(added)는 호출자에게 돌려줘야 화면이 상세로 이동할 수 있다.
+    // dispose 후 크래시를 막기 위해 state 할당만 mounted 일 때 수행한다.
+    if (ref.mounted) {
+      state = result;
+    }
     return result.hasError ? null : added;
   }
 

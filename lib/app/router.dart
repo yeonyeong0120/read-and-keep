@@ -10,6 +10,7 @@ import '../features/auth/presentation/password_reset_screen.dart';
 import '../features/auth/presentation/signup_screen.dart';
 import '../features/books/presentation/book_detail_screen.dart';
 import '../features/books/presentation/book_select_screen.dart';
+import '../features/books/presentation/bookshelf_screen.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/recommendation/presentation/recommend_screen.dart';
 import '../features/trend/presentation/trend_screen.dart';
@@ -81,6 +82,10 @@ GoRouter router(Ref ref) {
                   GoRoute(
                     path: 'book-select',
                     builder: (context, state) => const BookSelectScreen(),
+                  ),
+                  GoRoute(
+                    path: 'bookshelf',
+                    builder: (context, state) => const BookshelfScreen(),
                   ),
                   GoRoute(
                     path: 'book-detail/:bookId',

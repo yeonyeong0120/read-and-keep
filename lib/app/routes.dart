@@ -30,6 +30,9 @@ abstract final class AppRoutes {
   /// 책 선택 화면 (BK-001). 홈 브랜치 하위(탭바 유지).
   static const String bookSelect = '/book-select';
 
+  /// 책장 전체보기 화면 (BK-002). 홈 브랜치 하위(탭바 유지).
+  static const String bookshelf = '/bookshelf';
+
   /// 책 상세 화면 (BK-004). 실제 GoRoute path 는 '/book-detail/:bookId'.
   static const String bookDetail = '/book-detail';
 
