@@ -59,13 +59,17 @@ class AuthNotifier extends _$AuthNotifier {
     required String nickname,
   }) async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(() async {
+    final result = await AsyncValue.guard(() async {
       await ref.read(authRepositoryProvider).signUpWithEmailPassword(
             email: email,
             password: password,
             nickname: nickname,
           );
     });
+    // 가입 성공 → 자동 로그인 → 화면 전환으로 본 Provider 가 dispose 될 수 있다.
+    // dispose 된 뒤 state 할당은 크래시를 유발하므로 mounted 일 때만 할당한다.
+    if (!ref.mounted) return;
+    state = result;
   }
 
   Future<void> signIn({
@@ -73,34 +77,42 @@ class AuthNotifier extends _$AuthNotifier {
     required String password,
   }) async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(() async {
+    final result = await AsyncValue.guard(() async {
       await ref.read(authRepositoryProvider).signInWithEmailPassword(
             email: email,
             password: password,
           );
     });
+    if (!ref.mounted) return;
+    state = result;
   }
 
   Future<void> signOut() async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(
+    final result = await AsyncValue.guard(
       () async => ref.read(authRepositoryProvider).signOut(),
     );
+    if (!ref.mounted) return;
+    state = result;
   }
 
   Future<void> sendPasswordResetEmail({required String email}) async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(
+    final result = await AsyncValue.guard(
       () async => ref.read(authRepositoryProvider).sendPasswordResetEmail(
             email: email,
           ),
     );
+    if (!ref.mounted) return;
+    state = result;
   }
 
   Future<void> resendEmailVerification() async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(
+    final result = await AsyncValue.guard(
       () async => ref.read(authRepositoryProvider).sendEmailVerification(),
     );
+    if (!ref.mounted) return;
+    state = result;
   }
 }

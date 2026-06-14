@@ -86,7 +86,8 @@ class _GreetingHeader extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('안녕하세요, $nickname님', style: AppTextStyles.headline),
+              // PNG 처럼 두 줄로 표시하고, 둘째 줄 끝에 장식용 손 흔드는 이모지를 둔다.
+              Text('안녕하세요,\n$nickname님 👋', style: AppTextStyles.headline),
               const SizedBox(height: AppSpacing.xs),
               const Text(
                 '오늘도 좋은 문장을 기록해보세요.',
