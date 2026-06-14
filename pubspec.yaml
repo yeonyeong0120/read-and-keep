@@ -112,6 +112,7 @@ flutter:
   # === 환경 변수 ===
   assets:
     - .env
+    - assets/images/
 
   fonts:
     - family: Pretendard
