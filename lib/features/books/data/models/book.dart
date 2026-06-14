@@ -83,4 +83,37 @@ class Book {
       'captureCount': 0,
     };
   }
+
+  /// 일부 필드만 교체한 사본을 만든다.
+  ///
+  /// 신규 등록 시 Firestore 문서 ID 를 확정한 뒤 [bookId] 만 채워 반환하는 데 쓴다.
+  Book copyWith({
+    String? bookId,
+    String? title,
+    String? author,
+    String? coverUrl,
+    String? description,
+    String? isbn13,
+    String? kakaoBookId,
+    String? publisher,
+    DateTime? createdAt,
+    DateTime? lastSelectedAt,
+    DateTime? lastCapturedAt,
+    int? captureCount,
+  }) {
+    return Book(
+      bookId: bookId ?? this.bookId,
+      title: title ?? this.title,
+      author: author ?? this.author,
+      coverUrl: coverUrl ?? this.coverUrl,
+      description: description ?? this.description,
+      isbn13: isbn13 ?? this.isbn13,
+      kakaoBookId: kakaoBookId ?? this.kakaoBookId,
+      publisher: publisher ?? this.publisher,
+      createdAt: createdAt ?? this.createdAt,
+      lastSelectedAt: lastSelectedAt ?? this.lastSelectedAt,
+      lastCapturedAt: lastCapturedAt ?? this.lastCapturedAt,
+      captureCount: captureCount ?? this.captureCount,
+    );
+  }
 }

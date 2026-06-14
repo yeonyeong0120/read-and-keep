@@ -332,7 +332,7 @@ final class BookActionNotifierProvider
 }
 
 String _$bookActionNotifierHash() =>
-    r'd58a596604310228a9805e2353df414ddf8a5ca0';
+    r'dc1f00cd400927e6cd3673f5b315630dd940dcdc';
 
 /// 책 관련 사용자 액션(등록·선택)을 수행하는 Notifier.
 ///

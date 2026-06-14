@@ -112,8 +112,12 @@ class BookRepository {
       }
     }
 
-    final ref = await _booksRef.add(kakaoBook.toBook().toFirestoreOnCreate());
-    return Book.fromFirestore(await ref.get());
+    // 신규 등록: 문서 ID 를 먼저 확보해 반환 객체의 bookId 를 보장한다.
+    // (서버 타임스탬프가 아직 미반영된 즉시 재조회에 의존하지 않는다.)
+    final docRef = _booksRef.doc();
+    final newBook = kakaoBook.toBook();
+    await docRef.set(newBook.toFirestoreOnCreate());
+    return newBook.copyWith(bookId: docRef.id);
   }
 
   /// 마지막 선택 시각을 서버 타임스탬프로 갱신한다.
