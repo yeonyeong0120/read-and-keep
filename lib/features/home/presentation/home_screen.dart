@@ -8,6 +8,10 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../auth/domain/auth_providers.dart';
+import '../../books/data/models/book.dart';
+import '../../books/domain/book_providers.dart';
+import '../../books/presentation/widgets/book_cover.dart';
+import '../../books/presentation/widgets/book_relative_time.dart';
 
 /// 홈 화면 (MN-001).
 ///
@@ -32,12 +36,10 @@ class HomeScreen extends ConsumerWidget {
               _SectionHeader(
                 '내 책장',
                 actionLabel: '전체보기 >',
-                onAction: () {
-                  // TODO(BK-002): 책장 전체보기 화면으로 라우팅.
-                },
+                onAction: () => context.go(AppRoutes.bookshelf),
               ),
               const SizedBox(height: AppSpacing.md),
-              const _BookshelfEmptyCard(),
+              const _BookshelfSection(),
               const SizedBox(height: AppSpacing.xl),
               const _SectionHeader('최근 저장한 문장'),
               const SizedBox(height: AppSpacing.md),
@@ -131,6 +133,105 @@ class _SectionHeader extends StatelessWidget {
             child: Text(actionLabel!, style: AppTextStyles.caption),
           ),
       ],
+    );
+  }
+}
+
+/// 책장 섹션. booksProvider 를 구독해 0권이면 empty, 1권 이상이면
+/// 최근 활동순 상위 3권을 가로 스크롤 카드로 보여준다.
+class _BookshelfSection extends ConsumerWidget {
+  const _BookshelfSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final booksAsync = ref.watch(booksProvider());
+
+    return booksAsync.when(
+      // 로딩 중에는 카드 높이만큼 빈 공간을 둬 레이아웃 점프를 막는다.
+      loading: () => const SizedBox(height: 220),
+      // 에러 시에는 empty 카드로 폴백한다.
+      error: (_, _) => const _BookshelfEmptyCard(),
+      data: (books) {
+        if (books.isEmpty) return const _BookshelfEmptyCard();
+        // booksProvider() 기본 정렬이 최근 활동순이므로 상위 3권을 취한다.
+        final top = books.take(3).toList();
+        return _BookshelfHorizontalList(books: top);
+      },
+    );
+  }
+}
+
+/// 가로 스크롤 책 카드 목록.
+class _BookshelfHorizontalList extends StatelessWidget {
+  const _BookshelfHorizontalList({required this.books});
+
+  final List<Book> books;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 220,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.zero,
+        itemCount: books.length,
+        separatorBuilder: (context, _) =>
+            const SizedBox(width: AppSpacing.md),
+        itemBuilder: (context, index) {
+          final book = books[index];
+          return _HomeBookCard(
+            book: book,
+            onTap: () => context.go(AppRoutes.bookDetailOf(book.bookId)),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 가로 스크롤용 책 카드(표지 위, 제목·저자·최근 기록 아래).
+class _HomeBookCard extends StatelessWidget {
+  const _HomeBookCard({required this.book, required this.onTap});
+
+  final Book book;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final recordTime = book.lastCapturedAt ?? book.lastSelectedAt;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 104,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            BookCover(url: book.coverUrl, width: 104, height: 148, iconSize: 32),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              book.title,
+              style: AppTextStyles.bodyStrong,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              book.author,
+              style: AppTextStyles.caption,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '최근 기록 ${bookRelativeTime(recordTime)}',
+              style: AppTextStyles.caption,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
