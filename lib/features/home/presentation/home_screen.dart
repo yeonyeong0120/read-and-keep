@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -48,9 +50,7 @@ class HomeScreen extends ConsumerWidget {
               const _AddCaptureHint(),
               const SizedBox(height: AppSpacing.md),
               _AddCaptureButton(
-                onPressed: () {
-                  // TODO(BK-001): 책 선택 화면으로 라우팅(문장 추가 진입).
-                },
+                onPressed: () => context.go(AppRoutes.bookSelect),
               ),
               const SizedBox(height: AppSpacing.xl),
             ],
@@ -86,7 +86,8 @@ class _GreetingHeader extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('안녕하세요, $nickname님', style: AppTextStyles.headline),
+              // PNG 처럼 두 줄로 표시하고, 둘째 줄 끝에 장식용 손 흔드는 이모지를 둔다.
+              Text('안녕하세요,\n$nickname님 👋', style: AppTextStyles.headline),
               const SizedBox(height: AppSpacing.xs),
               const Text(
                 '오늘도 좋은 문장을 기록해보세요.',
