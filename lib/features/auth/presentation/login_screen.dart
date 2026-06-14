@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../domain/auth_providers.dart';
-import 'signup_screen.dart';
 
 /// CM-002 로그인 화면.
 ///
@@ -112,9 +113,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onKeepSignedInChanged: (value) => setState(
                         () => _keepSignedIn = value ?? false,
                       ),
-                      onForgotPassword: () {
-                        // TODO(step5-e): 비밀번호 찾기 화면(CM-004)으로 라우팅.
-                      },
+                      onForgotPassword: () =>
+                          context.push(AppRoutes.passwordReset),
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     _LoginButton(isLoading: isLoading, onPressed: _submit),
@@ -124,12 +124,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const _SocialLoginButtons(),
                     const SizedBox(height: AppSpacing.xxl),
                     _SignUpLink(
-                      // STEP 5-E 에서 라우터(go_router)로 정리한다.
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const SignupScreen(),
-                        ),
-                      ),
+                      onPressed: () => context.push(AppRoutes.signup),
                     ),
                     const SizedBox(height: AppSpacing.lg),
                   ],

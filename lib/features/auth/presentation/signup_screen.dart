@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -79,7 +80,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         content: const Text('약관 전문은 추후 제공됩니다.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
+            onPressed: () => dialogContext.pop(),
             child: const Text('확인'),
           ),
         ],
@@ -103,7 +104,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               content: Text('인증 메일을 보냈습니다. 메일함을 확인해주세요.'),
             ),
           );
-          Navigator.of(context).pop();
+          context.pop();
         },
         error: (error, _) {
           ScaffoldMessenger.of(context).showSnackBar(
