@@ -188,7 +188,7 @@ final class CaptureActionNotifierProvider
 }
 
 String _$captureActionNotifierHash() =>
-    r'bbe50f8204cc630c6af197b3eb63e7c4f047fbcb';
+    r'dd2466a0a5a74938b577fc470956f624f2ecb608';
 
 /// 구절 관련 사용자 액션(저장·삭제·수정)을 수행하는 Notifier.
 ///
