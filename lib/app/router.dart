@@ -11,9 +11,6 @@ import '../features/auth/presentation/signup_screen.dart';
 import '../features/books/presentation/book_detail_screen.dart';
 import '../features/books/presentation/book_select_screen.dart';
 import '../features/books/presentation/bookshelf_screen.dart';
-import '../features/captures/data/models/capture.dart';
-import '../features/captures/presentation/capture_edit_screen.dart';
-import '../features/captures/presentation/capture_method_screen.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/recommendation/presentation/recommend_screen.dart';
 import '../features/trend/presentation/trend_screen.dart';
@@ -69,17 +66,6 @@ GoRouter router(Ref ref) {
         path: AppRoutes.passwordReset,
         builder: (context, state) => const PasswordResetScreen(),
       ),
-      // CP-006/CP-005 편집 화면은 탭바를 숨겨야 하므로 셸 바깥 최상위에 둔다.
-      // source 는 쿼리로 받아 CaptureSource 로 파싱하고, 기본은 manual 이다.
-      GoRoute(
-        path: '${AppRoutes.captureEdit}/:bookId',
-        builder: (context, state) => CaptureEditScreen(
-          bookId: state.pathParameters['bookId']!,
-          source: CaptureSource.fromString(
-            state.uri.queryParameters['source'],
-          ),
-        ),
-      ),
       // 메인 탭 셸: 홈/추천/트렌드 3개 브랜치를 IndexedStack 으로 유지한다.
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
@@ -104,13 +90,6 @@ GoRouter router(Ref ref) {
                   GoRoute(
                     path: 'book-detail/:bookId',
                     builder: (context, state) => BookDetailScreen(
-                      bookId: state.pathParameters['bookId']!,
-                    ),
-                  ),
-                  // CP-001 방법 선택은 탭바를 유지하므로 홈 브랜치 하위에 둔다.
-                  GoRoute(
-                    path: 'capture-method/:bookId',
-                    builder: (context, state) => CaptureMethodScreen(
                       bookId: state.pathParameters['bookId']!,
                     ),
                   ),

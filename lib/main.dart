@@ -6,7 +6,6 @@ import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 
 import 'app/app.dart';
 import 'features/books/data/datasources/kakao_book_cache.dart';
-import 'features/captures/data/datasources/capture_draft_cache.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
@@ -20,10 +19,9 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // 3. Hive 초기화 + 카카오 검색 캐시 / 구절 draft Box 오픈
+  // 3. Hive 초기화 + 카카오 검색 캐시 Box 오픈
   await Hive.initFlutter();
   await Hive.openBox<String>(KakaoBookCache.boxName);
-  await Hive.openBox<String>(CaptureDraftCache.boxName);
 
   // 4. Riverpod 루트 등록 후 앱 실행
   runApp(const ProviderScope(child: ReadAndKeepApp()));
