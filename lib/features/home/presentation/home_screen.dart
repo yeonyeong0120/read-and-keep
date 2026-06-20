@@ -12,8 +12,6 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../../books/data/models/book.dart';
 import '../../books/domain/book_providers.dart';
-import '../../books/presentation/book_detail_screen.dart';
-import '../../books/presentation/bookshelf_overview_screen.dart';
 import '../../books/presentation/widgets/book_cover.dart';
 import '../../books/presentation/widgets/book_relative_time.dart';
 
@@ -26,11 +24,7 @@ class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   void _goToBookshelfOverview(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const BookshelfOverviewScreen(),
-      ),
-    );
+    context.push(AppRoutes.bookshelf);
   }
 
   @override
@@ -167,7 +161,7 @@ class _BookshelfSection extends ConsumerWidget {
     final booksAsync = ref.watch(booksProvider());
 
     return booksAsync.when(
-      loading: () => const SizedBox(height: 220),
+      loading: () => const SizedBox(height: 224),
       error: (_, _) => const _BookshelfEmptyCard(),
       data: (books) {
         if (books.isEmpty) return const _BookshelfEmptyCard();
@@ -189,7 +183,7 @@ class _BookshelfHorizontalList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 220,
+      height: 224,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.zero,
@@ -467,11 +461,7 @@ class _RecentCaptureCard extends StatelessWidget {
   final _RecentCaptureSummary summary;
 
   void _goToBookDetail(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => BookDetailScreen(bookId: summary.bookId),
-      ),
-    );
+    context.push(AppRoutes.bookDetailOf(summary.bookId));
   }
 
   @override

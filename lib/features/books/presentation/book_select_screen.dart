@@ -2,16 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../captures/presentation/capture_method_screen.dart';
 import '../data/models/book.dart';
 import '../data/models/kakao_book.dart';
 import '../domain/book_providers.dart';
-import 'bookshelf_overview_screen.dart';
 import 'widgets/book_cover.dart';
 import 'widgets/book_relative_time.dart';
 
@@ -78,25 +78,20 @@ class _BookSelectScreenState extends ConsumerState<BookSelectScreen> {
   }
 
   void _goToCaptureMethod(Book book) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CaptureMethodScreen(
-          bookId: book.bookId,
-          bookTitle: book.title,
-          bookAuthor: book.author,
-          bookPublisher: book.publisher,
-          bookCoverUrl: book.coverUrl,
-        ),
+    context.push(
+      AppRoutes.captureMethod,
+      extra: (
+        bookId: book.bookId,
+        bookTitle: book.title,
+        bookAuthor: book.author,
+        bookPublisher: book.publisher,
+        bookCoverUrl: book.coverUrl,
       ),
     );
   }
 
   void _goToBookshelfOverview() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const BookshelfOverviewScreen(),
-      ),
-    );
+    context.push(AppRoutes.bookshelf);
   }
 
   @override

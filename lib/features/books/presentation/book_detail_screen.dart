@@ -3,7 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -11,13 +13,8 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../captures/data/models/capture.dart';
 import '../../captures/data/models/capture_comment.dart';
 import '../../captures/domain/capture_providers.dart';
-import '../../captures/presentation/capture_comment_add_screen.dart';
-import '../../captures/presentation/capture_comment_edit_screen.dart';
-import '../../captures/presentation/capture_edit_screen.dart';
-import '../../captures/presentation/capture_method_screen.dart';
 import '../data/models/book.dart';
 import '../domain/book_providers.dart';
-import 'bookshelf_edit_screen.dart';
 
 class BookDetailScreen extends ConsumerWidget {
   const BookDetailScreen({required this.bookId, super.key});
@@ -94,7 +91,7 @@ class BookDetailScreen extends ConsumerWidget {
         const SnackBar(content: Text('책을 삭제했어요.')),
       );
 
-      Navigator.of(context).pop();
+      context.pop();
     } catch (e) {
       if (!context.mounted) return;
 
@@ -163,11 +160,7 @@ class BookDetailScreen extends ConsumerWidget {
   }
 
   void _goToBookshelfEdit(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const BookshelfEditScreen(),
-      ),
-    );
+    context.push(AppRoutes.bookshelfEdit);
   }
 
   @override
@@ -539,33 +532,24 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   }
 
   void _goToCaptureMethod(BuildContext context, Book book) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CaptureMethodScreen(
-          bookId: book.bookId,
-          bookTitle: book.title,
-          bookAuthor: book.author,
-          bookPublisher: book.publisher,
-          bookCoverUrl: book.coverUrl,
-        ),
+    context.push(
+      AppRoutes.captureMethod,
+      extra: (
+        bookId: book.bookId,
+        bookTitle: book.title,
+        bookAuthor: book.author,
+        bookPublisher: book.publisher,
+        bookCoverUrl: book.coverUrl,
       ),
     );
   }
 
   void _goToCaptureEdit(BuildContext context, Capture capture) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CaptureEditScreen(capture: capture),
-      ),
-    );
+    context.push(AppRoutes.captureEdit, extra: capture);
   }
 
   void _goToAddComment(BuildContext context, Capture capture) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CaptureCommentAddScreen(capture: capture),
-      ),
-    );
+    context.push(AppRoutes.captureCommentAdd, extra: capture);
   }
 
   void _goToEditComment(
@@ -573,13 +557,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     Capture capture,
     CaptureComment comment,
   ) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CaptureCommentEditScreen(
-          capture: capture,
-          comment: comment,
-        ),
-      ),
+    context.push(
+      AppRoutes.captureCommentEdit,
+      extra: (capture: capture, comment: comment),
     );
   }
 }

@@ -1,11 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../app/routes.dart';
 import '../data/models/capture.dart';
-import 'capture_confirm_screen.dart';
 
 class CameraOcrScreen extends StatefulWidget {
   const CameraOcrScreen({
@@ -276,18 +277,19 @@ class _CameraOcrScreenState extends State<CameraOcrScreen> {
     final selectedText =
         sortedIndexes.map((index) => _candidates[index]).join('\n');
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CaptureConfirmScreen(
-          bookId: widget.bookId,
-          bookTitle: widget.bookTitle,
-          bookAuthor: widget.bookAuthor,
-          bookPublisher: widget.bookPublisher,
-          bookCoverUrl: widget.bookCoverUrl,
-          initialQuote: selectedText,
-          source: CaptureSource.camera,
-          ocrRawText: _ocrRawText,
-        ),
+    context.push(
+      AppRoutes.captureConfirm,
+      extra: (
+        bookId: widget.bookId,
+        bookTitle: widget.bookTitle,
+        bookAuthor: widget.bookAuthor,
+        bookPublisher: widget.bookPublisher,
+        bookCoverUrl: widget.bookCoverUrl,
+        initialQuote: selectedText,
+        initialPageNumber: null,
+        initialComment: '',
+        source: CaptureSource.camera,
+        ocrRawText: _ocrRawText,
       ),
     );
   }
@@ -300,18 +302,19 @@ class _CameraOcrScreenState extends State<CameraOcrScreen> {
       return;
     }
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CaptureConfirmScreen(
-          bookId: widget.bookId,
-          bookTitle: widget.bookTitle,
-          bookAuthor: widget.bookAuthor,
-          bookPublisher: widget.bookPublisher,
-          bookCoverUrl: widget.bookCoverUrl,
-          initialQuote: _ocrRawText.trim(),
-          source: CaptureSource.camera,
-          ocrRawText: _ocrRawText,
-        ),
+    context.push(
+      AppRoutes.captureConfirm,
+      extra: (
+        bookId: widget.bookId,
+        bookTitle: widget.bookTitle,
+        bookAuthor: widget.bookAuthor,
+        bookPublisher: widget.bookPublisher,
+        bookCoverUrl: widget.bookCoverUrl,
+        initialQuote: _ocrRawText.trim(),
+        initialPageNumber: null,
+        initialComment: '',
+        source: CaptureSource.camera,
+        ocrRawText: _ocrRawText,
       ),
     );
   }

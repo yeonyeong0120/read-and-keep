@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
@@ -107,7 +108,7 @@ class _CaptureConfirmScreenState extends ConsumerState<CaptureConfirmScreen> {
           const SnackBar(content: Text('문장이 저장되었어요.')),
         );
 
-        Navigator.of(context).pop(true);
+        context.pop(true);
       },
       error: (error, _) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -128,7 +129,7 @@ class _CaptureConfirmScreenState extends ConsumerState<CaptureConfirmScreen> {
         title: const Text('문장 수정 / 확인'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: isLoading ? null : () => Navigator.of(context).pop(),
+          onPressed: isLoading ? null : () => context.pop(),
         ),
       ),
       body: SafeArea(
@@ -251,7 +252,7 @@ class _CaptureConfirmScreenState extends ConsumerState<CaptureConfirmScreen> {
                       onPressed: isLoading
                           ? null
                           : () {
-                              Navigator.of(context).pop();
+                              context.pop();
                             },
                       child: Text(
                         widget.source == CaptureSource.manual
