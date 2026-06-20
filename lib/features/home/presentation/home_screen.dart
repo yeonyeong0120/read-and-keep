@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,16 +12,26 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../../books/data/models/book.dart';
 import '../../books/domain/book_providers.dart';
+import '../../books/presentation/book_detail_screen.dart';
+import '../../books/presentation/bookshelf_overview_screen.dart';
 import '../../books/presentation/widgets/book_cover.dart';
 import '../../books/presentation/widgets/book_relative_time.dart';
 
 /// 홈 화면 (MN-001).
 ///
-/// 이번 단계의 실데이터는 인사말 닉네임뿐이다. 책장·최근 문장은
-/// 책(BK)/구절(CP) feature 미구현 상태이므로 empty/placeholder 로 둔다.
-/// AppBar 없이 본문 최상단에 인사 영역을 직접 배치한다.
+/// 홈에서 내 책장 전체보기로 바로 이동할 수 있게 연결한다.
+/// 최근 저장한 문장도 Firestore에서 실제 데이터로 표시한다.
+/// 문장 추가는 기존처럼 책 선택 화면으로 이동한다.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
+
+  void _goToBookshelfOverview(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const BookshelfOverviewScreen(),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -33,27 +45,34 @@ class HomeScreen extends ConsumerWidget {
               const SizedBox(height: AppSpacing.lg),
               const _GreetingHeader(),
               const SizedBox(height: AppSpacing.xl),
+
               _SectionHeader(
                 '내 책장',
                 actionLabel: '전체보기 >',
-                onAction: () => context.go(AppRoutes.bookshelf),
+                onAction: () => _goToBookshelfOverview(context),
               ),
+
               const SizedBox(height: AppSpacing.md),
               const _BookshelfSection(),
+
               const SizedBox(height: AppSpacing.xl),
               const _SectionHeader('최근 저장한 문장'),
               const SizedBox(height: AppSpacing.md),
-              const _RecentCaptureEmptyCard(),
+              const _RecentCaptureSection(),
+
               const SizedBox(height: AppSpacing.xl),
               const _SectionHeader('오늘의 문장'),
               const SizedBox(height: AppSpacing.md),
               const _TodayQuoteCard(),
+
               const SizedBox(height: AppSpacing.xl),
               const _AddCaptureHint(),
               const SizedBox(height: AppSpacing.md),
+
               _AddCaptureButton(
                 onPressed: () => context.go(AppRoutes.bookSelect),
               ),
+
               const SizedBox(height: AppSpacing.xl),
             ],
           ),
@@ -71,7 +90,6 @@ class _GreetingHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(currentAppUserProvider);
 
-    // AsyncValue 를 when 으로 처리한다. 수동 로딩 플래그는 쓰지 않는다.
     final nickname = userAsync.when(
       data: (user) {
         final name = user?.nickname ?? '';
@@ -88,7 +106,6 @@ class _GreetingHeader extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // PNG 처럼 두 줄로 표시하고, 둘째 줄 끝에 장식용 손 흔드는 이모지를 둔다.
               Text('안녕하세요,\n$nickname님 👋', style: AppTextStyles.headline),
               const SizedBox(height: AppSpacing.xs),
               const Text(
@@ -99,7 +116,6 @@ class _GreetingHeader extends ConsumerWidget {
           ),
         ),
         const SizedBox(width: AppSpacing.md),
-        // PNG 의 우측 프로필은 원형 테두리 없이 아이콘만 노출된다.
         IconButton(
           onPressed: () {
             // TODO(MY-001): 마이페이지로 라우팅.
@@ -115,7 +131,11 @@ class _GreetingHeader extends ConsumerWidget {
 
 /// 섹션 헤더. 우측 액션(전체보기 등)은 선택적으로 노출한다.
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.title, {this.actionLabel, this.onAction});
+  const _SectionHeader(
+    this.title, {
+    this.actionLabel,
+    this.onAction,
+  });
 
   final String title;
   final String? actionLabel;
@@ -137,8 +157,8 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// 책장 섹션. booksProvider 를 구독해 0권이면 empty, 1권 이상이면
-/// 최근 활동순 상위 3권을 가로 스크롤 카드로 보여준다.
+/// 책장 섹션. booksProvider 를 구독해 0권이면 empty,
+/// 1권 이상이면 최근 활동순 상위 3권을 가로 스크롤 카드로 보여준다.
 class _BookshelfSection extends ConsumerWidget {
   const _BookshelfSection();
 
@@ -147,14 +167,13 @@ class _BookshelfSection extends ConsumerWidget {
     final booksAsync = ref.watch(booksProvider());
 
     return booksAsync.when(
-      // 로딩 중에는 카드 높이만큼 빈 공간을 둬 레이아웃 점프를 막는다.
       loading: () => const SizedBox(height: 220),
-      // 에러 시에는 empty 카드로 폴백한다.
       error: (_, _) => const _BookshelfEmptyCard(),
       data: (books) {
         if (books.isEmpty) return const _BookshelfEmptyCard();
-        // booksProvider() 기본 정렬이 최근 활동순이므로 상위 3권을 취한다.
+
         final top = books.take(3).toList();
+
         return _BookshelfHorizontalList(books: top);
       },
     );
@@ -175,10 +194,12 @@ class _BookshelfHorizontalList extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.zero,
         itemCount: books.length,
-        separatorBuilder: (context, _) =>
-            const SizedBox(width: AppSpacing.md),
+        separatorBuilder: (context, _) {
+          return const SizedBox(width: AppSpacing.md);
+        },
         itemBuilder: (context, index) {
           final book = books[index];
+
           return _HomeBookCard(
             book: book,
             onTap: () => context.go(AppRoutes.bookDetailOf(book.bookId)),
@@ -189,9 +210,12 @@ class _BookshelfHorizontalList extends StatelessWidget {
   }
 }
 
-/// 가로 스크롤용 책 카드(표지 위, 제목·저자·최근 기록 아래).
+/// 가로 스크롤용 책 카드.
 class _HomeBookCard extends StatelessWidget {
-  const _HomeBookCard({required this.book, required this.onTap});
+  const _HomeBookCard({
+    required this.book,
+    required this.onTap,
+  });
 
   final Book book;
   final VoidCallback onTap;
@@ -207,7 +231,12 @@ class _HomeBookCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            BookCover(url: book.coverUrl, width: 104, height: 148, iconSize: 32),
+            BookCover(
+              url: book.coverUrl,
+              width: 104,
+              height: 148,
+              iconSize: 32,
+            ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               book.title,
@@ -236,13 +265,398 @@ class _HomeBookCard extends StatelessWidget {
   }
 }
 
-/// 책장 empty 상태 카드. 강조 섹션 톤(surfaceVariant)으로 구분한다.
+/// 최근 저장한 문장 섹션.
+/// 현재 사용자의 책 목록을 기준으로 각 책의 captures 중 최신 1건을 찾아 가장 최근 구절을 보여준다.
+class _RecentCaptureSection extends ConsumerWidget {
+  const _RecentCaptureSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final booksAsync = ref.watch(booksProvider());
+
+    return booksAsync.when(
+      loading: () => const _RecentCaptureLoadingCard(),
+      error: (_, _) => const _RecentCaptureEmptyCard(),
+      data: (books) {
+        if (books.isEmpty) {
+          return const _RecentCaptureEmptyCard();
+        }
+
+        return FutureBuilder<_RecentCaptureSummary?>(
+          future: _loadRecentCapture(books),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const _RecentCaptureLoadingCard();
+            }
+
+            if (snapshot.hasError) {
+              return const _RecentCaptureEmptyCard();
+            }
+
+            final recent = snapshot.data;
+
+            if (recent == null) {
+              return const _RecentCaptureEmptyCard();
+            }
+
+            return _RecentCaptureCard(summary: recent);
+          },
+        );
+      },
+    );
+  }
+
+  Future<_RecentCaptureSummary?> _loadRecentCapture(List<Book> books) async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      return null;
+    }
+
+    _RecentCaptureSummary? latest;
+
+    final firestore = FirebaseFirestore.instance;
+
+    for (final book in books) {
+      final bookRef = firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('books')
+          .doc(book.bookId);
+
+      QuerySnapshot<Map<String, dynamic>>? capturesSnapshot;
+
+      try {
+        capturesSnapshot = await bookRef
+            .collection('captures')
+            .orderBy('createdAt', descending: true)
+            .limit(1)
+            .get();
+      } catch (_) {
+        try {
+          capturesSnapshot = await bookRef
+              .collection('captures')
+              .orderBy('capturedAt', descending: true)
+              .limit(1)
+              .get();
+        } catch (_) {
+          capturesSnapshot = await bookRef.collection('captures').limit(1).get();
+        }
+      }
+
+      if (capturesSnapshot.docs.isEmpty) {
+        continue;
+      }
+
+      final captureDoc = capturesSnapshot.docs.first;
+      final data = captureDoc.data();
+
+      final quote = _readString(data, ['quote', 'text']);
+      final createdAt = _readDateTime(data, ['createdAt', 'capturedAt']);
+
+      if (quote.trim().isEmpty || createdAt == null) {
+        continue;
+      }
+
+      final summary = _RecentCaptureSummary(
+        bookId: book.bookId,
+        bookTitle: book.title,
+        bookAuthor: book.author,
+        bookCoverUrl: book.coverUrl,
+        quote: quote.trim(),
+        comment: _readString(data, ['comment']),
+        pageNumber: _readInt(data, ['pageNumber']),
+        createdAt: createdAt,
+        isPublic: _readBool(data, ['isPublic']) ?? false,
+      );
+
+      if (latest == null || summary.createdAt.isAfter(latest.createdAt)) {
+        latest = summary;
+      }
+    }
+
+    return latest;
+  }
+
+  String _readString(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final value = data[key];
+
+      if (value is String && value.trim().isNotEmpty) {
+        return value;
+      }
+    }
+
+    return '';
+  }
+
+  int? _readInt(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final value = data[key];
+
+      if (value is int) {
+        return value;
+      }
+
+      if (value is num) {
+        return value.toInt();
+      }
+    }
+
+    return null;
+  }
+
+  bool? _readBool(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final value = data[key];
+
+      if (value is bool) {
+        return value;
+      }
+    }
+
+    return null;
+  }
+
+  DateTime? _readDateTime(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final value = data[key];
+
+      if (value is Timestamp) {
+        return value.toDate();
+      }
+
+      if (value is DateTime) {
+        return value;
+      }
+    }
+
+    return null;
+  }
+}
+
+class _RecentCaptureSummary {
+  const _RecentCaptureSummary({
+    required this.bookId,
+    required this.bookTitle,
+    required this.bookAuthor,
+    required this.bookCoverUrl,
+    required this.quote,
+    required this.comment,
+    required this.pageNumber,
+    required this.createdAt,
+    required this.isPublic,
+  });
+
+  final String bookId;
+  final String bookTitle;
+  final String bookAuthor;
+  final String bookCoverUrl;
+  final String quote;
+  final String comment;
+  final int? pageNumber;
+  final DateTime createdAt;
+  final bool isPublic;
+}
+
+class _RecentCaptureCard extends StatelessWidget {
+  const _RecentCaptureCard({
+    required this.summary,
+  });
+
+  final _RecentCaptureSummary summary;
+
+  void _goToBookDetail(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BookDetailScreen(bookId: summary.bookId),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pageText =
+        summary.pageNumber == null ? '' : 'p.${summary.pageNumber} · ';
+
+    final visibilityText = summary.isPublic ? '공개' : '비공개';
+    final visibilityIcon =
+        summary.isPublic ? Icons.language_rounded : Icons.lock_outline_rounded;
+
+    return Material(
+      color: AppColors.surface,
+      borderRadius: AppRadius.lgRadius,
+      child: InkWell(
+        borderRadius: AppRadius.lgRadius,
+        onTap: () => _goToBookDetail(context),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            borderRadius: AppRadius.lgRadius,
+            border: Border.all(color: AppColors.outline),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              BookCover(
+                url: summary.bookCoverUrl,
+                width: 56,
+                height: 76,
+                iconSize: 24,
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      summary.bookTitle,
+                      style: AppTextStyles.bodyStrong,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      summary.bookAuthor,
+                      style: AppTextStyles.caption,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      '“${summary.quote}”',
+                      style: AppTextStyles.body,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '$pageText${bookRelativeTime(summary.createdAt)} · $visibilityText',
+                            style: AppTextStyles.caption,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Icon(
+                          visibilityIcon,
+                          size: 14,
+                          color: AppColors.textSecondary,
+                        ),
+                      ],
+                    ),
+                    if (summary.comment.trim().isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        '코멘트: ${summary.comment}',
+                        style: AppTextStyles.caption,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RecentCaptureLoadingCard extends StatelessWidget {
+  const _RecentCaptureLoadingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.lgRadius,
+        border: Border.all(color: AppColors.outline),
+      ),
+      child: const Row(
+        children: [
+          SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              '최근 저장한 문장을 불러오는 중이에요.',
+              style: AppTextStyles.caption,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 최근 저장한 문장 empty 상태 카드.
+class _RecentCaptureEmptyCard extends StatelessWidget {
+  const _RecentCaptureEmptyCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.lgRadius,
+        border: Border.all(color: AppColors.outline),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: const BoxDecoration(
+              color: AppColors.surfaceVariant,
+              borderRadius: AppRadius.mdRadius,
+            ),
+            child: const Icon(
+              Icons.menu_book_rounded,
+              size: 24,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('아직 저장한 문장이 없어요', style: AppTextStyles.bodyStrong),
+                SizedBox(height: AppSpacing.xs),
+                Text(
+                  '마음에 드는 문장을 저장하면 여기에 표시됩니다',
+                  style: AppTextStyles.caption,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 책장 empty 상태 카드.
 class _BookshelfEmptyCard extends StatelessWidget {
   const _BookshelfEmptyCard();
 
   @override
   Widget build(BuildContext context) {
-    // TODO(STEP 6-C): 책 데이터 연동 시 가로 스크롤 책 카드 목록으로 대체.
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.xl),
@@ -270,62 +684,7 @@ class _BookshelfEmptyCard extends StatelessWidget {
   }
 }
 
-/// 최근 저장한 문장 empty 상태 카드. 흰색(surface) + 테두리(outline)로 구분한다.
-class _RecentCaptureEmptyCard extends StatelessWidget {
-  const _RecentCaptureEmptyCard();
-
-  @override
-  Widget build(BuildContext context) {
-    // TODO(STEP 6-C): 최근 구절 1건을 연동해 카드로 표시.
-    // PNG 의 실제 카드(좌측 책 썸네일 + 우측 책제목·페이지·구절·N일 전) 골격을
-    // empty 상태에서도 동일하게 유지한다.
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.lgRadius,
-        border: Border.all(color: AppColors.outline),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // 좌측 아이콘 영역(책 썸네일 자리).
-          Container(
-            width: 48,
-            height: 48,
-            decoration: const BoxDecoration(
-              color: AppColors.surfaceVariant,
-              borderRadius: AppRadius.mdRadius,
-            ),
-            child: const Icon(
-              Icons.menu_book_rounded,
-              size: 24,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          // 우측 텍스트 영역.
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('아직 저장한 문장이 없어요', style: AppTextStyles.bodyStrong),
-                SizedBox(height: AppSpacing.xs),
-                Text(
-                  '마음에 드는 문장을 저장하면 여기에 표시됩니다',
-                  style: AppTextStyles.caption,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 오늘의 문장 카드. cold start 카피만 표시(일러스트 생략).
+/// 오늘의 문장 카드.
 class _TodayQuoteCard extends StatelessWidget {
   const _TodayQuoteCard();
 
@@ -356,13 +715,12 @@ class _TodayQuoteCard extends StatelessWidget {
   }
 }
 
-/// 문장 추가 진입 안내. CTA 바로 위의 보조 안내 문구.
+/// 문장 추가 진입 안내.
 class _AddCaptureHint extends StatelessWidget {
   const _AddCaptureHint();
 
   @override
   Widget build(BuildContext context) {
-    // PNG 처럼 좌측 정렬한다.
     return const Row(
       children: [
         Icon(

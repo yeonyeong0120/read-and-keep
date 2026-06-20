@@ -2,23 +2,24 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../captures/presentation/capture_method_screen.dart';
 import '../data/models/book.dart';
 import '../data/models/kakao_book.dart';
 import '../domain/book_providers.dart';
+import 'bookshelf_overview_screen.dart';
 import 'widgets/book_cover.dart';
 import 'widgets/book_relative_time.dart';
 
 /// BK-001 책 선택 화면.
 ///
-/// 검색어가 비어 있으면 내 책장([booksProvider])을, 검색 중이면 카카오 검색
-/// 결과([bookSearchProvider])를 보여준다. 책을 "선택" 하면 책 상세로 이동한다.
+/// 검색어가 비어 있으면 내 책장([booksProvider])을,
+/// 검색 중이면 카카오 검색 결과([bookSearchProvider])를 보여준다.
+/// 책을 "선택" 하면 문장 추가 방법 선택 화면(CP-001)으로 이동한다.
 class BookSelectScreen extends ConsumerStatefulWidget {
   const BookSelectScreen({super.key});
 
@@ -30,7 +31,6 @@ class _BookSelectScreenState extends ConsumerState<BookSelectScreen> {
   final _searchController = TextEditingController();
   Timer? _debounce;
 
-  // 디바운스가 확정한 검색어. 본문 분기는 이 값을 기준으로 한다.
   String _query = '';
 
   @override
@@ -40,13 +40,18 @@ class _BookSelectScreenState extends ConsumerState<BookSelectScreen> {
     super.dispose();
   }
 
-  /// 입력 변화 시 기존 타이머를 취소하고 400ms 디바운스 후 검색/초기화한다.
   void _onSearchChanged(String value) {
     _debounce?.cancel();
+
     _debounce = Timer(const Duration(milliseconds: 400), () {
       if (!mounted) return;
+
       final query = value.trim();
-      setState(() => _query = query);
+
+      setState(() {
+        _query = query;
+      });
+
       if (query.isEmpty) {
         ref.read(bookSearchProvider.notifier).clear();
       } else {
@@ -55,21 +60,43 @@ class _BookSelectScreenState extends ConsumerState<BookSelectScreen> {
     });
   }
 
-  /// 카카오 검색 결과 책을 책장에 등록하고 상세로 이동한다.
   Future<void> _addFromKakao(KakaoBook kakaoBook) async {
     final book =
         await ref.read(bookActionProvider.notifier).addFromKakao(kakaoBook);
+
     if (book != null && mounted) {
-      context.go(AppRoutes.bookDetailOf(book.bookId));
+      _goToCaptureMethod(book);
     }
   }
 
-  /// 이미 책장에 있는 책을 선택(마지막 선택 시각 갱신)하고 상세로 이동한다.
   Future<void> _selectExisting(Book book) async {
     await ref.read(bookActionProvider.notifier).selectExisting(book.bookId);
+
     if (mounted) {
-      context.go(AppRoutes.bookDetailOf(book.bookId));
+      _goToCaptureMethod(book);
     }
+  }
+
+  void _goToCaptureMethod(Book book) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CaptureMethodScreen(
+          bookId: book.bookId,
+          bookTitle: book.title,
+          bookAuthor: book.author,
+          bookPublisher: book.publisher,
+          bookCoverUrl: book.coverUrl,
+        ),
+      ),
+    );
+  }
+
+  void _goToBookshelfOverview() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const BookshelfOverviewScreen(),
+      ),
+    );
   }
 
   @override
@@ -77,7 +104,9 @@ class _BookSelectScreenState extends ConsumerState<BookSelectScreen> {
     final isSearching = _query.isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('책 선택')),
+      appBar: AppBar(
+        title: const Text('책 선택'),
+      ),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -106,7 +135,10 @@ class _BookSelectScreenState extends ConsumerState<BookSelectScreen> {
             Expanded(
               child: isSearching
                   ? _SearchResults(onSelect: _addFromKakao)
-                  : _BookshelfContent(onSelect: _selectExisting),
+                  : _BookshelfContent(
+                      onSelect: _selectExisting,
+                      onOpenOverview: _goToBookshelfOverview,
+                    ),
             ),
             _BottomNotice(isSearching: isSearching),
           ],
@@ -116,9 +148,11 @@ class _BookSelectScreenState extends ConsumerState<BookSelectScreen> {
   }
 }
 
-/// 검색 입력 필드.
 class _SearchField extends StatelessWidget {
-  const _SearchField({required this.controller, required this.onChanged});
+  const _SearchField({
+    required this.controller,
+    required this.onChanged,
+  });
 
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
@@ -137,18 +171,23 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-/// 검색어가 없을 때: 내 책장 + 최근 선택한 책.
 class _BookshelfContent extends ConsumerWidget {
-  const _BookshelfContent({required this.onSelect});
+  const _BookshelfContent({
+    required this.onSelect,
+    required this.onOpenOverview,
+  });
 
   final ValueChanged<Book> onSelect;
+  final VoidCallback onOpenOverview;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final booksAsync = ref.watch(booksProvider());
 
     return booksAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(
+        child: CircularProgressIndicator(),
+      ),
       error: (_, _) => const _MessageBox(
         icon: Icons.error_outline_rounded,
         message: '책장을 불러오지 못했습니다',
@@ -161,7 +200,6 @@ class _BookshelfContent extends ConsumerWidget {
           );
         }
 
-        // 최근 선택한 책 1건(lastSelectedAt 최신).
         final recent = books.reduce(
           (a, b) => a.lastSelectedAt.isAfter(b.lastSelectedAt) ? a : b,
         );
@@ -185,9 +223,7 @@ class _BookshelfContent extends ConsumerWidget {
             _SectionHeader(
               '내 책장',
               actionLabel: '전체보기 >',
-              onAction: () {
-                // TODO(BK-002): 책장 전체보기 화면으로 라우팅.
-              },
+              onAction: onOpenOverview,
             ),
             const SizedBox(height: AppSpacing.md),
             ...books.map(
@@ -204,9 +240,10 @@ class _BookshelfContent extends ConsumerWidget {
   }
 }
 
-/// 검색어가 있을 때: 카카오 검색 결과.
 class _SearchResults extends ConsumerWidget {
-  const _SearchResults({required this.onSelect});
+  const _SearchResults({
+    required this.onSelect,
+  });
 
   final ValueChanged<KakaoBook> onSelect;
 
@@ -215,7 +252,9 @@ class _SearchResults extends ConsumerWidget {
     final searchAsync = ref.watch(bookSearchProvider);
 
     return searchAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(
+        child: CircularProgressIndicator(),
+      ),
       error: (_, _) => const _MessageBox(
         icon: Icons.error_outline_rounded,
         message: '검색 중 문제가 발생했습니다',
@@ -227,6 +266,7 @@ class _SearchResults extends ConsumerWidget {
             message: '검색 결과가 없습니다\n다른 검색어로 시도해보세요',
           );
         }
+
         return ListView(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.screenHorizontal,
@@ -248,7 +288,6 @@ class _SearchResults extends ConsumerWidget {
   }
 }
 
-/// 내 책장 책 카드.
 class _BookCard extends StatelessWidget {
   const _BookCard({
     required this.book,
@@ -292,7 +331,10 @@ class _BookCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: AppSpacing.xs),
-                Text(metaText, style: AppTextStyles.caption),
+                Text(
+                  metaText,
+                  style: AppTextStyles.caption,
+                ),
               ],
             ),
           ),
@@ -304,9 +346,11 @@ class _BookCard extends StatelessWidget {
   }
 }
 
-/// 카카오 검색 결과 카드.
 class _KakaoCard extends StatelessWidget {
-  const _KakaoCard({required this.kakaoBook, required this.onSelect});
+  const _KakaoCard({
+    required this.kakaoBook,
+    required this.onSelect,
+  });
 
   final KakaoBook kakaoBook;
   final VoidCallback onSelect;
@@ -368,9 +412,10 @@ class _KakaoCard extends StatelessWidget {
   }
 }
 
-/// 작은 "선택" 버튼. 풀폭 테마를 누르고 컴팩트하게 만든다.
 class _SelectButton extends StatelessWidget {
-  const _SelectButton({required this.onPressed});
+  const _SelectButton({
+    required this.onPressed,
+  });
 
   final VoidCallback onPressed;
 
@@ -388,9 +433,12 @@ class _SelectButton extends StatelessWidget {
   }
 }
 
-/// 섹션 헤더(우측 액션 선택적).
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.title, {this.actionLabel, this.onAction});
+  const _SectionHeader(
+    this.title, {
+    this.actionLabel,
+    this.onAction,
+  });
 
   final String title;
   final String? actionLabel;
@@ -401,20 +449,28 @@ class _SectionHeader extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: AppTextStyles.title),
+        Text(
+          title,
+          style: AppTextStyles.title,
+        ),
         if (actionLabel != null)
           TextButton(
             onPressed: onAction,
-            child: Text(actionLabel!, style: AppTextStyles.caption),
+            child: Text(
+              actionLabel!,
+              style: AppTextStyles.caption,
+            ),
           ),
       ],
     );
   }
 }
 
-/// 중앙 안내(빈 상태/에러 공용).
 class _MessageBox extends StatelessWidget {
-  const _MessageBox({required this.icon, required this.message});
+  const _MessageBox({
+    required this.icon,
+    required this.message,
+  });
 
   final IconData icon;
   final String message;
@@ -427,7 +483,11 @@ class _MessageBox extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 40, color: AppColors.textSecondary),
+            Icon(
+              icon,
+              size: 40,
+              color: AppColors.textSecondary,
+            ),
             const SizedBox(height: AppSpacing.md),
             Text(
               message,
@@ -441,9 +501,10 @@ class _MessageBox extends StatelessWidget {
   }
 }
 
-/// 하단 안내 박스. 검색 여부에 따라 문구가 바뀐다.
 class _BottomNotice extends StatelessWidget {
-  const _BottomNotice({required this.isSearching});
+  const _BottomNotice({
+    required this.isSearching,
+  });
 
   final bool isSearching;
 
@@ -470,7 +531,10 @@ class _BottomNotice extends StatelessWidget {
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
-              child: Text(message, style: AppTextStyles.caption),
+              child: Text(
+                message,
+                style: AppTextStyles.caption,
+              ),
             ),
           ],
         ),
@@ -479,7 +543,6 @@ class _BottomNotice extends StatelessWidget {
   }
 }
 
-/// datetime(ISO 문자열)에서 연도 4자리를 추출한다. 없으면 빈 문자열.
 String _yearOf(String datetime) {
   if (datetime.length < 4) return '';
   return datetime.substring(0, 4);
