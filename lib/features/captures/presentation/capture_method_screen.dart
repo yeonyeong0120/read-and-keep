@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
@@ -24,9 +25,6 @@ class CaptureMethodScreen extends StatelessWidget {
   final String bookPublisher;
   final String? bookCoverUrl;
 
-  static bool _hasAcceptedGalleryGuide = false;
-  static bool _hasAcceptedCameraGuide = false;
-
   void _goToManualInput(BuildContext context) {
     context.push(
       AppRoutes.captureConfirm,
@@ -45,12 +43,70 @@ class CaptureMethodScreen extends StatelessWidget {
     );
   }
 
+  /// 갤러리 진입. OS 사진 권한 상태를 진짜 기준으로 삼는다.
+  ///
+  /// - 이미 허용(또는 제한 허용) → 안내 생략하고 바로 OCR 화면 진입.
+  /// - 미결정/거부 → 안내 다이얼로그 후 [Permission.request] 로 권한 요청 →
+  ///   허용되면 바로 진입(추가 탭 불필요).
+  /// - 영구 거부 → 설정으로 유도([openAppSettings]).
+  ///
+  /// Android 13+ 에서 [Permission.photos] 는 매니페스트에 선언된
+  /// READ_MEDIA_IMAGES 를 기준으로 동작한다.
   Future<void> _goToGalleryOcr(BuildContext context) async {
-    final accepted = await _showGalleryGuideIfNeeded(context);
+    final status = await Permission.photos.status;
 
+    if (status.isGranted || status.isLimited) {
+      if (!context.mounted) return;
+      _pushGalleryOcr(context);
+      return;
+    }
+
+    if (status.isPermanentlyDenied) {
+      if (!context.mounted) return;
+      await _showSettingsGuide(
+        context,
+        title: '사진 접근 권한이 필요해요',
+        message: '갤러리에서 사진을 선택하려면 설정에서 사진 권한을 허용해주세요.',
+      );
+      return;
+    }
+
+    if (!context.mounted) return;
+    final accepted = await _showAccessGuide(
+      context,
+      title: '갤러리 접근 안내',
+      message: '책 페이지 사진을 선택하기 위해 갤러리에 접근합니다.\n\n'
+          '선택한 사진은 문장 인식에만 사용되며 서버에 업로드하지 않습니다.',
+    );
     if (!accepted) return;
+
+    final result = await Permission.photos.request();
     if (!context.mounted) return;
 
+    if (result.isGranted || result.isLimited) {
+      _pushGalleryOcr(context);
+    } else if (result.isPermanentlyDenied) {
+      await _showSettingsGuide(
+        context,
+        title: '사진 접근 권한이 필요해요',
+        message: '갤러리에서 사진을 선택하려면 설정에서 사진 권한을 허용해주세요.',
+      );
+    }
+    // 그 외 단순 거부는 조용히 종료한다(다시 시도 가능).
+  }
+
+  /// 카메라 진입.
+  ///
+  /// 카메라는 image_picker 가 시스템 카메라 인텐트(ACTION_IMAGE_CAPTURE)로
+  /// 호출하므로, 앱이 보유하는 CAMERA 권한이 없다(매니페스트 미선언이 정상).
+  /// 권한 처리는 시스템 카메라 앱이 직접 담당하므로 permission_handler 로
+  /// 게이팅하지 않고 바로 OCR 화면으로 진입한다. 이로써 앱 재시작마다
+  /// 안내 팝업이 다시 뜨던 문제가 사라진다.
+  void _goToCameraOcr(BuildContext context) {
+    _pushCameraOcr(context);
+  }
+
+  void _pushGalleryOcr(BuildContext context) {
     context.push(
       AppRoutes.galleryOcr,
       extra: (
@@ -63,12 +119,7 @@ class CaptureMethodScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _goToCameraOcr(BuildContext context) async {
-    final accepted = await _showCameraGuideIfNeeded(context);
-
-    if (!accepted) return;
-    if (!context.mounted) return;
-
+  void _pushCameraOcr(BuildContext context) {
     context.push(
       AppRoutes.cameraOcr,
       extra: (
@@ -81,32 +132,26 @@ class CaptureMethodScreen extends StatelessWidget {
     );
   }
 
-  Future<bool> _showGalleryGuideIfNeeded(BuildContext context) async {
-    if (_hasAcceptedGalleryGuide) {
-      return true;
-    }
-
+  /// 권한 요청 전 사용자에게 사유를 안내한다. "동의하고 계속" 시 true.
+  Future<bool> _showAccessGuide(
+    BuildContext context, {
+    required String title,
+    required String message,
+  }) async {
     final accepted = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('갤러리 접근 안내'),
-          content: const Text(
-            '책 페이지 사진을 선택하기 위해 갤러리에 접근합니다.\n\n'
-            '선택한 사진은 문장 인식에만 사용되며 서버에 업로드하지 않습니다.',
-          ),
+          title: Text(title),
+          content: Text(message),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(false);
-              },
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('취소'),
             ),
             FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(true);
-              },
+              onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('동의하고 계속'),
             ),
           ],
@@ -114,53 +159,38 @@ class CaptureMethodScreen extends StatelessWidget {
       },
     );
 
-    if (accepted == true) {
-      _hasAcceptedGalleryGuide = true;
-      return true;
-    }
-
-    return false;
+    return accepted ?? false;
   }
 
-  Future<bool> _showCameraGuideIfNeeded(BuildContext context) async {
-    if (_hasAcceptedCameraGuide) {
-      return true;
-    }
-
-    final accepted = await showDialog<bool>(
+  /// 영구 거부 상태 안내. "설정으로 이동" 시 앱 설정 화면을 연다.
+  Future<void> _showSettingsGuide(
+    BuildContext context, {
+    required String title,
+    required String message,
+  }) async {
+    final goSettings = await showDialog<bool>(
       context: context,
-      barrierDismissible: false,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('카메라 접근 안내'),
-          content: const Text(
-            '책 문장을 촬영하기 위해 카메라에 접근합니다.\n\n'
-            '촬영한 사진은 문장 인식에만 사용되며 서버에 업로드하지 않습니다.',
-          ),
+          title: Text(title),
+          content: Text(message),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(false);
-              },
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('취소'),
             ),
             FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(true);
-              },
-              child: const Text('동의하고 계속'),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('설정으로 이동'),
             ),
           ],
         );
       },
     );
 
-    if (accepted == true) {
-      _hasAcceptedCameraGuide = true;
-      return true;
+    if (goSettings == true) {
+      await openAppSettings();
     }
-
-    return false;
   }
 
   @override
