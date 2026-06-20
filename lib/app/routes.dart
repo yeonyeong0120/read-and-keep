@@ -42,6 +42,9 @@ typedef CaptureCommentEditArgs = ({
 abstract final class AppRoutes {
   AppRoutes._();
 
+  /// 스플래시 화면 (CM-001). 앱 시작 시 인증 상태 확정 전까지 머무는 진입점.
+  static const String splash = '/splash';
+
   /// 로그인 화면 (CM-002). 미인증 사용자의 기본 진입점.
   static const String login = '/login';
 

@@ -29,7 +29,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   // 위젯 로컬 UI 상태. 인증 상태(authProvider)와는 분리해서 관리한다.
   bool _obscurePassword = true;
-  bool _keepSignedIn = false;
 
   @override
   void dispose() {
@@ -109,10 +108,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     _OptionsRow(
-                      keepSignedIn: _keepSignedIn,
-                      onKeepSignedInChanged: (value) => setState(
-                        () => _keepSignedIn = value ?? false,
-                      ),
                       onForgotPassword: () =>
                           context.push(AppRoutes.passwordReset),
                     ),
@@ -230,34 +225,22 @@ class _PasswordField extends StatelessWidget {
   }
 }
 
-/// 옵션 행: 좌측 로그인 상태 유지 체크박스, 우측 비밀번호 찾기 링크.
+/// 옵션 행: 우측 비밀번호 찾기 링크.
+///
+/// 기존 좌측의 "로그인 상태 유지" 체크박스는 제거했다. Firebase Auth 는
+/// 모바일에서 기본 LOCAL persistence 라 해당 옵션이 실효성이 없었다.
 class _OptionsRow extends StatelessWidget {
   const _OptionsRow({
-    required this.keepSignedIn,
-    required this.onKeepSignedInChanged,
     required this.onForgotPassword,
   });
 
-  final bool keepSignedIn;
-  final ValueChanged<bool?> onKeepSignedInChanged;
   final VoidCallback onForgotPassword;
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        Row(
-          children: [
-            Checkbox(
-              value: keepSignedIn,
-              onChanged: onKeepSignedInChanged,
-              visualDensity: VisualDensity.compact,
-            ),
-            const SizedBox(width: AppSpacing.xs),
-            const Text('로그인 상태 유지', style: AppTextStyles.caption),
-          ],
-        ),
         TextButton(
           onPressed: onForgotPassword,
           child: const Text('비밀번호 찾기 >', style: AppTextStyles.caption),

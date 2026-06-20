@@ -8,6 +8,7 @@ import '../features/auth/domain/auth_providers.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/password_reset_screen.dart';
 import '../features/auth/presentation/signup_screen.dart';
+import '../features/auth/presentation/splash_screen.dart';
 import '../features/books/presentation/book_detail_screen.dart';
 import '../features/books/presentation/book_select_screen.dart';
 import '../features/books/presentation/bookshelf_edit_screen.dart';
@@ -41,21 +42,31 @@ GoRouter router(Ref ref) {
   ref.onDispose(refreshNotifier.dispose);
 
   return GoRouter(
-    initialLocation: AppRoutes.login,
+    // 앱 시작 시에는 스플래시에서 인증 상태가 확정될 때까지 대기한다.
+    initialLocation: AppRoutes.splash,
     refreshListenable: refreshNotifier,
     redirect: (context, state) {
       final userAsync = ref.read(currentAppUserProvider);
 
       // 사용자 상태 로딩 중에는 현재 위치를 유지한다.
+      // 앱 시작 시 위치는 splash 이므로, 확정 전까지 splash 에 머문다.
+      // 이로써 로그인 화면이 잠깐 떴다 사라지는 깜빡임이 사라진다.
       if (userAsync.isLoading) return null;
 
       // Riverpod 3.x 안전 접근: whenOrNull(data:) 로 값을 꺼낸다.
       final isLoggedIn = userAsync.whenOrNull(data: (user) => user) != null;
 
       final location = state.matchedLocation;
+      final isSplash = location == AppRoutes.splash;
       final isAuthRoute = location == AppRoutes.login ||
           location == AppRoutes.signup ||
           location == AppRoutes.passwordReset;
+
+      // 로딩이 끝나 인증이 확정되면 스플래시에서 반드시 분기한다.
+      // (로그인 상태면 홈, 미로그인이면 로그인 — splash 에 머물지 않게)
+      if (isSplash) {
+        return isLoggedIn ? AppRoutes.home : AppRoutes.login;
+      }
 
       // 미로그인 + 비인증 경로 → 로그인.
       if (!isLoggedIn && !isAuthRoute) return AppRoutes.login;
@@ -64,6 +75,11 @@ GoRouter router(Ref ref) {
       return null;
     },
     routes: [
+      // 스플래시: 인증 화면군과 함께 셸 바깥 최상위에 둔다.
+      GoRoute(
+        path: AppRoutes.splash,
+        builder: (context, state) => const SplashScreen(),
+      ),
       // 인증 화면은 탭바 비노출이므로 셸 바깥 최상위에 둔다.
       GoRoute(
         path: AppRoutes.login,

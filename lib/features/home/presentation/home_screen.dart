@@ -49,6 +49,14 @@ class HomeScreen extends ConsumerWidget {
               const SizedBox(height: AppSpacing.md),
               const _BookshelfSection(),
 
+              // 주 CTA(문장 추가)를 책장 바로 아래로 배치한다.
+              const SizedBox(height: AppSpacing.xl),
+              const _AddCaptureHint(),
+              const SizedBox(height: AppSpacing.md),
+              _AddCaptureButton(
+                onPressed: () => context.go(AppRoutes.bookSelect),
+              ),
+
               const SizedBox(height: AppSpacing.xl),
               const _SectionHeader('최근 저장한 문장'),
               const SizedBox(height: AppSpacing.md),
@@ -58,14 +66,6 @@ class HomeScreen extends ConsumerWidget {
               const _SectionHeader('오늘의 문장'),
               const SizedBox(height: AppSpacing.md),
               const _TodayQuoteCard(),
-
-              const SizedBox(height: AppSpacing.xl),
-              const _AddCaptureHint(),
-              const SizedBox(height: AppSpacing.md),
-
-              _AddCaptureButton(
-                onPressed: () => context.go(AppRoutes.bookSelect),
-              ),
 
               const SizedBox(height: AppSpacing.xl),
             ],
