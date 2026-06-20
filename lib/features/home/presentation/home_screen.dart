@@ -161,7 +161,7 @@ class _BookshelfSection extends ConsumerWidget {
     final booksAsync = ref.watch(booksProvider());
 
     return booksAsync.when(
-      loading: () => const SizedBox(height: 220),
+      loading: () => const SizedBox(height: 224),
       error: (_, _) => const _BookshelfEmptyCard(),
       data: (books) {
         if (books.isEmpty) return const _BookshelfEmptyCard();
@@ -183,7 +183,7 @@ class _BookshelfHorizontalList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 220,
+      height: 224,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.zero,
