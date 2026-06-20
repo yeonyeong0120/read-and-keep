@@ -8,16 +8,12 @@ part of 'capture_providers.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// [CaptureRepository] 인스턴스를 제공한다.
-///
-/// keepAlive 로 앱 수명 동안 단일 인스턴스를 유지한다.
+/// CaptureRepository Provider
 
 @ProviderFor(captureRepository)
 final captureRepositoryProvider = CaptureRepositoryProvider._();
 
-/// [CaptureRepository] 인스턴스를 제공한다.
-///
-/// keepAlive 로 앱 수명 동안 단일 인스턴스를 유지한다.
+/// CaptureRepository Provider
 
 final class CaptureRepositoryProvider
     extends
@@ -27,9 +23,7 @@ final class CaptureRepositoryProvider
           CaptureRepository
         >
     with $Provider<CaptureRepository> {
-  /// [CaptureRepository] 인스턴스를 제공한다.
-  ///
-  /// keepAlive 로 앱 수명 동안 단일 인스턴스를 유지한다.
+  /// CaptureRepository Provider
   CaptureRepositoryProvider._()
     : super(
         from: null,
@@ -66,14 +60,14 @@ final class CaptureRepositoryProvider
 
 String _$captureRepositoryHash() => r'6acc9a801c3914aa7577227e3cb166e81193bb2f';
 
-/// 특정 책의 구절 목록 스트림. family 형태로 bookId 를 받는다.
+/// 특정 책에 저장된 구절 목록 Provider
 
-@ProviderFor(captures)
-final capturesProvider = CapturesFamily._();
+@ProviderFor(bookCaptures)
+final bookCapturesProvider = BookCapturesFamily._();
 
-/// 특정 책의 구절 목록 스트림. family 형태로 bookId 를 받는다.
+/// 특정 책에 저장된 구절 목록 Provider
 
-final class CapturesProvider
+final class BookCapturesProvider
     extends
         $FunctionalProvider<
           AsyncValue<List<Capture>>,
@@ -81,24 +75,24 @@ final class CapturesProvider
           Stream<List<Capture>>
         >
     with $FutureModifier<List<Capture>>, $StreamProvider<List<Capture>> {
-  /// 특정 책의 구절 목록 스트림. family 형태로 bookId 를 받는다.
-  CapturesProvider._({
-    required CapturesFamily super.from,
+  /// 특정 책에 저장된 구절 목록 Provider
+  BookCapturesProvider._({
+    required BookCapturesFamily super.from,
     required String super.argument,
   }) : super(
          retry: null,
-         name: r'capturesProvider',
+         name: r'bookCapturesProvider',
          isAutoDispose: true,
          dependencies: null,
          $allTransitiveDependencies: null,
        );
 
   @override
-  String debugGetCreateSourceHash() => _$capturesHash();
+  String debugGetCreateSourceHash() => _$bookCapturesHash();
 
   @override
   String toString() {
-    return r'capturesProvider'
+    return r'bookCapturesProvider'
         ''
         '($argument)';
   }
@@ -112,12 +106,12 @@ final class CapturesProvider
   @override
   Stream<List<Capture>> create(Ref ref) {
     final argument = this.argument as String;
-    return captures(ref, argument);
+    return bookCaptures(ref, bookId: argument);
   }
 
   @override
   bool operator ==(Object other) {
-    return other is CapturesProvider && other.argument == argument;
+    return other is BookCapturesProvider && other.argument == argument;
   }
 
   @override
@@ -126,48 +120,39 @@ final class CapturesProvider
   }
 }
 
-String _$capturesHash() => r'b6ac5d202f5a391155157f9e08ce5645cd5435ac';
+String _$bookCapturesHash() => r'af1490ea07c47c90c8b44a4481a8fced066bd4ac';
 
-/// 특정 책의 구절 목록 스트림. family 형태로 bookId 를 받는다.
+/// 특정 책에 저장된 구절 목록 Provider
 
-final class CapturesFamily extends $Family
+final class BookCapturesFamily extends $Family
     with $FunctionalFamilyOverride<Stream<List<Capture>>, String> {
-  CapturesFamily._()
+  BookCapturesFamily._()
     : super(
         retry: null,
-        name: r'capturesProvider',
+        name: r'bookCapturesProvider',
         dependencies: null,
         $allTransitiveDependencies: null,
         isAutoDispose: true,
       );
 
-  /// 특정 책의 구절 목록 스트림. family 형태로 bookId 를 받는다.
+  /// 특정 책에 저장된 구절 목록 Provider
 
-  CapturesProvider call(String bookId) =>
-      CapturesProvider._(argument: bookId, from: this);
+  BookCapturesProvider call({required String bookId}) =>
+      BookCapturesProvider._(argument: bookId, from: this);
 
   @override
-  String toString() => r'capturesProvider';
+  String toString() => r'bookCapturesProvider';
 }
 
-/// 구절 관련 사용자 액션(저장·삭제·수정)을 수행하는 Notifier.
-///
-/// 본 Notifier 는 "액션 진행/실패" 만 상태로 들고, 실제 구절 데이터는
-/// [capturesProvider] 스트림에서 흐른다.
+/// 문장 저장/삭제 같은 액션을 담당하는 Provider
 
 @ProviderFor(CaptureActionNotifier)
 final captureActionProvider = CaptureActionNotifierProvider._();
 
-/// 구절 관련 사용자 액션(저장·삭제·수정)을 수행하는 Notifier.
-///
-/// 본 Notifier 는 "액션 진행/실패" 만 상태로 들고, 실제 구절 데이터는
-/// [capturesProvider] 스트림에서 흐른다.
+/// 문장 저장/삭제 같은 액션을 담당하는 Provider
 final class CaptureActionNotifierProvider
     extends $AsyncNotifierProvider<CaptureActionNotifier, void> {
-  /// 구절 관련 사용자 액션(저장·삭제·수정)을 수행하는 Notifier.
-  ///
-  /// 본 Notifier 는 "액션 진행/실패" 만 상태로 들고, 실제 구절 데이터는
-  /// [capturesProvider] 스트림에서 흐른다.
+  /// 문장 저장/삭제 같은 액션을 담당하는 Provider
   CaptureActionNotifierProvider._()
     : super(
         from: null,
@@ -188,18 +173,15 @@ final class CaptureActionNotifierProvider
 }
 
 String _$captureActionNotifierHash() =>
-    r'dd2466a0a5a74938b577fc470956f624f2ecb608';
+    r'ab8353098df7216b8f8c92a1a47bb088837fa2ab';
 
-/// 구절 관련 사용자 액션(저장·삭제·수정)을 수행하는 Notifier.
-///
-/// 본 Notifier 는 "액션 진행/실패" 만 상태로 들고, 실제 구절 데이터는
-/// [capturesProvider] 스트림에서 흐른다.
+/// 문장 저장/삭제 같은 액션을 담당하는 Provider
 
 abstract class _$CaptureActionNotifier extends $AsyncNotifier<void> {
   FutureOr<void> build();
   @$mustCallSuper
   @override
-  WhenComplete runBuild() {
+  void runBuild() {
     final ref = this.ref as $Ref<AsyncValue<void>, void>;
     final element =
         ref.element
@@ -209,6 +191,6 @@ abstract class _$CaptureActionNotifier extends $AsyncNotifier<void> {
               Object?,
               Object?
             >;
-    return element.handleCreate(ref, build);
+    element.handleCreate(ref, build);
   }
 }

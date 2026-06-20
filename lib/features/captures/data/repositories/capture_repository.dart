@@ -3,10 +3,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/capture.dart';
 
-/// 구절(capture) CRUD(Firestore) 를 담당하는 Repository.
+/// 문장 수집 저장소.
 ///
-/// 본 Repository 는 예외를 그대로 던진다. 로딩/에러 상태 관리는 호출하는
-/// 쪽(Notifier)이 AsyncValue.guard 등으로 처리한다.
+/// 담당 역할:
+/// - 저장한 구절 추가
+/// - 책별 저장 구절 목록 조회
+/// - 책 문서의 구절 수 / 코멘트 수 / 최근 기록 갱신
+/// - 공개 구절 publicCaptures 복제 / 삭제
 class CaptureRepository {
   CaptureRepository({
     FirebaseAuth? auth,
@@ -17,100 +20,333 @@ class CaptureRepository {
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
 
-  /// `users/{uid}/books` 컬렉션. 미로그인 시 [StateError].
-  CollectionReference<Map<String, dynamic>> get _booksRef {
+  String get _uid {
     final user = _auth.currentUser;
+
     if (user == null) {
-      throw StateError('No authenticated user');
+      throw StateError('로그인된 사용자가 없습니다.');
     }
-    return _firestore.collection('users').doc(user.uid).collection('books');
+
+    return user.uid;
   }
 
-  /// 특정 책의 `captures` 서브컬렉션.
-  CollectionReference<Map<String, dynamic>> _capturesRef(String bookId) =>
-      _booksRef.doc(bookId).collection('captures');
-
-  /// 특정 책의 구절 목록 스트림. capturedAt 내림차순.
-  Stream<List<Capture>> watchCaptures(String bookId) {
-    return _capturesRef(bookId)
-        .orderBy('capturedAt', descending: true)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map(Capture.fromFirestore).toList());
-  }
-
-  /// 구절 저장.
-  ///
-  /// WriteBatch 로 다음을 원자적으로 처리한다.
-  ///   1) captures 문서 생성(doc() 로 id 선확보 후 set).
-  ///   2) 상위 book 문서의 captureCount 를 +1, lastCapturedAt 을 서버 타임스탬프로 갱신.
-  /// 반환 [Capture] 는 선확보한 문서 id 로 채워 돌려준다(즉시 재조회에 의존하지 않는다).
-  Future<Capture> addCapture({
+  CollectionReference<Map<String, dynamic>> _capturesRef({
+    required String userId,
     required String bookId,
-    required String text,
-    int? page,
-    String comment = '',
+  }) {
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('books')
+        .doc(bookId)
+        .collection('captures');
+  }
+
+  DocumentReference<Map<String, dynamic>> _bookRef({
+    required String userId,
+    required String bookId,
+  }) {
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('books')
+        .doc(bookId);
+  }
+
+  DocumentReference<Map<String, dynamic>> _publicCaptureRef({
+    required String captureId,
+  }) {
+    return _firestore.collection('publicCaptures').doc(captureId);
+  }
+
+  /// 특정 책에 저장된 구절 목록 실시간 조회.
+  Stream<List<Capture>> watchCapturesByBook(String bookId) {
+    final userId = _uid;
+
+    return _capturesRef(userId: userId, bookId: bookId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => Capture.fromFirestore(doc))
+              .toList(),
+        );
+  }
+
+  /// 문장/구절 저장.
+  Future<void> addCapture({
+    required String bookId,
+    required String bookTitle,
+    required String quote,
+    required String comment,
+    required int? pageNumber,
     required bool isPublic,
     required CaptureSource source,
     String? ocrRawText,
   }) async {
-    final bookRef = _booksRef.doc(bookId);
-    final captureRef = _capturesRef(bookId).doc();
+    final userId = _uid;
 
-    // set 과 반환에 같은 객체를 쓴다. capturedAt 은 toFirestoreOnCreate 에서
-    // serverTimestamp 로 치환되므로 여기 로컬 시각은 반환 객체용 자리표시값이다.
-    final capture = Capture(
-      captureId: captureRef.id,
+    final captureDoc = _capturesRef(
+      userId: userId,
       bookId: bookId,
-      text: text,
-      page: page,
+    ).doc();
+
+    final capture = Capture(
+      id: captureDoc.id,
+      userId: userId,
+      bookId: bookId,
+      bookTitle: bookTitle,
+      quote: quote,
       comment: comment,
+      pageNumber: pageNumber,
       isPublic: isPublic,
-      captureType: Capture.classifyType(text),
-      captureSource: source.value,
+      source: source,
       ocrRawText: ocrRawText,
-      capturedAt: DateTime.now(),
+      createdAt: DateTime.now(),
     );
 
     final batch = _firestore.batch();
-    batch.set(captureRef, capture.toFirestoreOnCreate());
-    batch.update(bookRef, {
-      'captureCount': FieldValue.increment(1),
-      'lastCapturedAt': FieldValue.serverTimestamp(),
-    });
-    // publicBooks 복제는 하지 않는다(isPublic 필드만 저장).
-    // TODO: TR 단계에서 publicBooks 복제.
-    await batch.commit();
 
-    return capture;
+    batch.set(
+      captureDoc,
+      capture.toFirestoreOnCreate(),
+    );
+
+    if (isPublic) {
+      batch.set(
+        _publicCaptureRef(captureId: captureDoc.id),
+        _publicCaptureDataOnCreate(
+          captureId: captureDoc.id,
+          userId: userId,
+          bookId: bookId,
+          bookTitle: bookTitle,
+          quote: quote,
+          comment: comment,
+          pageNumber: pageNumber,
+          source: source,
+          ocrRawText: ocrRawText,
+        ),
+      );
+    }
+
+    batch.set(
+      _bookRef(userId: userId, bookId: bookId),
+      {
+        'savedQuoteCount': FieldValue.increment(1),
+        'commentCount': comment.trim().isEmpty
+            ? FieldValue.increment(0)
+            : FieldValue.increment(1),
+        'lastCapturedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
+
+    await batch.commit();
   }
 
-  /// 구절 삭제.
+  /// 구절 수정.
   ///
-  /// batch 로 captures 문서 삭제 + 상위 book 의 captureCount 를 -1 한다.
-  Future<void> deleteCapture(String bookId, String captureId) async {
-    final batch = _firestore.batch();
-    batch.delete(_capturesRef(bookId).doc(captureId));
-    batch.update(_booksRef.doc(bookId), {
-      'captureCount': FieldValue.increment(-1),
-    });
-    await batch.commit();
-  }
-
-  /// 구절 수정. text/page/comment/isPublic 을 갱신하고 captureType 을 재산정한다.
+  /// 핵심:
+  /// - 비공개 → 공개 전환이면 publicCaptures 새 문서 생성
+  /// - 이미 공개된 구절 수정이면 기존 likeCount/commentCount는 유지
+  /// - 공개 → 비공개 전환이면 publicCaptures 삭제
   Future<void> updateCapture({
-    required String bookId,
-    required String captureId,
-    required String text,
-    int? page,
-    String comment = '',
+    required Capture capture,
+    required String quote,
+    required String comment,
+    required int? pageNumber,
     required bool isPublic,
   }) async {
-    await _capturesRef(bookId).doc(captureId).update({
-      'text': text,
-      'page': page,
+    final userId = _uid;
+
+    final captureRef = _capturesRef(
+      userId: userId,
+      bookId: capture.bookId,
+    ).doc(capture.id);
+
+    final publicRef = _publicCaptureRef(captureId: capture.id);
+
+    // 중요:
+    // publicCaptures 문서가 이미 있는지 확인해서
+    // 새 생성 / 기존 수정 로직을 분리한다.
+    final publicSnapshot = await publicRef.get();
+    final publicExists = publicSnapshot.exists;
+
+    final batch = _firestore.batch();
+
+    batch.update(captureRef, {
+      'quote': quote,
       'comment': comment,
+      'pageNumber': pageNumber,
       'isPublic': isPublic,
-      'captureType': Capture.classifyType(text),
+      'updatedAt': FieldValue.serverTimestamp(),
     });
+
+    if (isPublic) {
+      if (publicExists) {
+        // 이미 공개된 구절 수정:
+        // 좋아요 수와 댓글 수는 건드리지 않는다.
+        batch.set(
+          publicRef,
+          _publicCaptureDataOnExistingUpdate(
+            capture: capture,
+            userId: userId,
+            quote: quote,
+            comment: comment,
+            pageNumber: pageNumber,
+          ),
+          SetOptions(merge: true),
+        );
+      } else {
+        // 비공개였던 구절을 공개로 전환:
+        // publicCaptures 문서를 새로 만든다.
+        batch.set(
+          publicRef,
+          _publicCaptureDataOnCreate(
+            captureId: capture.id,
+            userId: userId,
+            bookId: capture.bookId,
+            bookTitle: capture.bookTitle,
+            quote: quote,
+            comment: comment,
+            pageNumber: pageNumber,
+            source: capture.source,
+            ocrRawText: capture.ocrRawText,
+          ),
+        );
+      }
+    } else {
+      // 공개였던 구절을 비공개로 전환:
+      // 공개 피드에서 제거한다.
+      if (publicExists) {
+        batch.delete(publicRef);
+      }
+    }
+
+    batch.set(
+      _bookRef(userId: userId, bookId: capture.bookId),
+      {
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
+
+    await batch.commit();
+  }
+
+  /// 저장한 구절 삭제.
+  Future<void> deleteCapture({
+    required String bookId,
+    required String captureId,
+    bool hadComment = false,
+  }) async {
+    final userId = _uid;
+
+    final captureRef = _capturesRef(
+      userId: userId,
+      bookId: bookId,
+    ).doc(captureId);
+
+    await _deleteCaptureComments(captureRef);
+
+    final batch = _firestore.batch();
+
+    batch.delete(captureRef);
+
+    batch.delete(
+      _publicCaptureRef(captureId: captureId),
+    );
+
+    batch.set(
+      _bookRef(userId: userId, bookId: bookId),
+      {
+        'savedQuoteCount': FieldValue.increment(-1),
+        'commentCount':
+            hadComment ? FieldValue.increment(-1) : FieldValue.increment(0),
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
+
+    await batch.commit();
+  }
+
+  Future<void> _deleteCaptureComments(
+    DocumentReference<Map<String, dynamic>> captureRef,
+  ) async {
+    const int batchSize = 300;
+
+    while (true) {
+      final commentsSnapshot =
+          await captureRef.collection('comments').limit(batchSize).get();
+
+      if (commentsSnapshot.docs.isEmpty) {
+        break;
+      }
+
+      final batch = _firestore.batch();
+
+      for (final commentDoc in commentsSnapshot.docs) {
+        batch.delete(commentDoc.reference);
+      }
+
+      await batch.commit();
+
+      if (commentsSnapshot.docs.length < batchSize) {
+        break;
+      }
+    }
+  }
+
+  Map<String, dynamic> _publicCaptureDataOnCreate({
+    required String captureId,
+    required String userId,
+    required String bookId,
+    required String bookTitle,
+    required String quote,
+    required String comment,
+    required int? pageNumber,
+    required CaptureSource source,
+    required String? ocrRawText,
+  }) {
+    return {
+      'captureId': captureId,
+      'userId': userId,
+      'bookId': bookId,
+      'bookTitle': bookTitle,
+      'quote': quote,
+      'comment': comment,
+      'pageNumber': pageNumber,
+      'source': source.value,
+      'ocrRawText': ocrRawText,
+      'isPublic': true,
+      'likeCount': 0,
+      'commentCount': 0,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+  }
+
+  Map<String, dynamic> _publicCaptureDataOnExistingUpdate({
+    required Capture capture,
+    required String userId,
+    required String quote,
+    required String comment,
+    required int? pageNumber,
+  }) {
+    return {
+      'captureId': capture.id,
+      'userId': userId,
+      'bookId': capture.bookId,
+      'bookTitle': capture.bookTitle,
+      'quote': quote,
+      'comment': comment,
+      'pageNumber': pageNumber,
+      'source': capture.source.value,
+      'ocrRawText': capture.ocrRawText,
+      'isPublic': true,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
   }
 }

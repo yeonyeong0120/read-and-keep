@@ -38,21 +38,4 @@ abstract final class AppRoutes {
 
   /// 특정 책 상세 경로를 만든다.
   static String bookDetailOf(String bookId) => '$bookDetail/$bookId';
-
-  // --- 구절 추가 (CP) ---
-
-  /// 문장 추가 방법 선택 화면 (CP-001). 홈 브랜치 하위(탭바 유지).
-  /// 실제 GoRoute path 는 'capture-method/:bookId'(홈 중첩).
-  static const String captureMethod = '/capture-method';
-
-  /// 구절 편집/직접입력 화면 (CP-006/CP-005 공용). 셸 바깥 최상위(탭바 숨김).
-  /// 실제 GoRoute path 는 '/capture-edit/:bookId', source 는 쿼리로 전달.
-  static const String captureEdit = '/capture-edit';
-
-  /// 특정 책의 방법 선택 경로를 만든다.
-  static String captureMethodOf(String bookId) => '$captureMethod/$bookId';
-
-  /// 특정 책의 편집 경로를 만든다. 진입 출처([source])는 쿼리로 전달한다.
-  static String captureEditOf(String bookId, String source) =>
-      '$captureEdit/$bookId?source=$source';
 }
