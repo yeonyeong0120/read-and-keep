@@ -2,13 +2,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../data/models/public_capture.dart';
-import 'public_capture_detail_screen.dart';
 
 final publicCapturesProvider =
     StreamProvider.autoDispose<List<PublicCapture>>((ref) {
@@ -64,12 +65,9 @@ class TrendScreen extends ConsumerWidget {
                     child: _PublicCaptureCard(
                       capture: capture,
                       onOpen: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => PublicCaptureDetailScreen(
-                              capture: capture,
-                            ),
-                          ),
+                        context.push(
+                          AppRoutes.publicCaptureDetail,
+                          extra: capture,
                         );
                       },
                     ),

@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../data/models/book.dart';
 import '../domain/book_providers.dart';
-import 'book_detail_screen.dart';
-import 'bookshelf_edit_screen.dart';
 import 'widgets/book_cover.dart';
 import 'widgets/book_relative_time.dart';
 
@@ -52,19 +52,11 @@ class _BookshelfOverviewScreenState
   }
 
   void _goToBookDetail(Book book) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => BookDetailScreen(bookId: book.bookId),
-      ),
-    );
+    context.push(AppRoutes.bookDetailOf(book.bookId));
   }
 
   void _goToBookshelfEdit() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const BookshelfEditScreen(),
-      ),
-    );
+    context.push(AppRoutes.bookshelfEdit);
   }
 
   List<Book> _filterAndSortBooks(List<Book> books) {
@@ -112,7 +104,7 @@ class _BookshelfOverviewScreenState
         title: const Text('내 책장'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.pop(),
         ),
       ),
       body: SafeArea(

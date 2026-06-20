@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
@@ -109,7 +110,7 @@ class _CaptureEditScreenState extends ConsumerState<CaptureEditScreen> {
         const SnackBar(content: Text('구절을 수정했어요.')),
       );
 
-      Navigator.of(context).pop();
+      context.pop();
     } catch (e) {
       if (!mounted) return;
 
@@ -137,7 +138,7 @@ class _CaptureEditScreenState extends ConsumerState<CaptureEditScreen> {
         title: const Text('구절 편집'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+          onPressed: _isSaving ? null : () => context.pop(),
         ),
       ),
       body: SafeArea(

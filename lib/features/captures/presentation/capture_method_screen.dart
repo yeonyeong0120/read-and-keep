@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../data/models/capture.dart';
-import 'camera_ocr_screen.dart';
-import 'capture_confirm_screen.dart';
-import 'gallery_ocr_screen.dart';
 
 class CaptureMethodScreen extends StatelessWidget {
   const CaptureMethodScreen({
@@ -29,16 +28,19 @@ class CaptureMethodScreen extends StatelessWidget {
   static bool _hasAcceptedCameraGuide = false;
 
   void _goToManualInput(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CaptureConfirmScreen(
-          bookId: bookId,
-          bookTitle: bookTitle,
-          bookAuthor: bookAuthor,
-          bookPublisher: bookPublisher,
-          bookCoverUrl: bookCoverUrl,
-          source: CaptureSource.manual,
-        ),
+    context.push(
+      AppRoutes.captureConfirm,
+      extra: (
+        bookId: bookId,
+        bookTitle: bookTitle,
+        bookAuthor: bookAuthor,
+        bookPublisher: bookPublisher,
+        bookCoverUrl: bookCoverUrl,
+        initialQuote: '',
+        initialPageNumber: null,
+        initialComment: '',
+        source: CaptureSource.manual,
+        ocrRawText: null,
       ),
     );
   }
@@ -49,15 +51,14 @@ class CaptureMethodScreen extends StatelessWidget {
     if (!accepted) return;
     if (!context.mounted) return;
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => GalleryOcrScreen(
-          bookId: bookId,
-          bookTitle: bookTitle,
-          bookAuthor: bookAuthor,
-          bookPublisher: bookPublisher,
-          bookCoverUrl: bookCoverUrl,
-        ),
+    context.push(
+      AppRoutes.galleryOcr,
+      extra: (
+        bookId: bookId,
+        bookTitle: bookTitle,
+        bookAuthor: bookAuthor,
+        bookPublisher: bookPublisher,
+        bookCoverUrl: bookCoverUrl,
       ),
     );
   }
@@ -68,15 +69,14 @@ class CaptureMethodScreen extends StatelessWidget {
     if (!accepted) return;
     if (!context.mounted) return;
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CameraOcrScreen(
-          bookId: bookId,
-          bookTitle: bookTitle,
-          bookAuthor: bookAuthor,
-          bookPublisher: bookPublisher,
-          bookCoverUrl: bookCoverUrl,
-        ),
+    context.push(
+      AppRoutes.cameraOcr,
+      extra: (
+        bookId: bookId,
+        bookTitle: bookTitle,
+        bookAuthor: bookAuthor,
+        bookPublisher: bookPublisher,
+        bookCoverUrl: bookCoverUrl,
       ),
     );
   }
@@ -171,7 +171,7 @@ class CaptureMethodScreen extends StatelessWidget {
         title: const Text('문장 추가'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.pop(),
         ),
       ),
       body: SafeArea(
@@ -319,7 +319,7 @@ class _SelectedBookCard extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () => context.pop(),
                     child: const Text('책 변경'),
                   ),
                 ],
