@@ -1,7 +1,9 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -64,9 +66,8 @@ class _DetailBody extends StatelessWidget {
           ),
         ),
         _AddCaptureBottom(
-          onPressed: () {
-            // TODO(CP-001): 현재 책이 선택된 상태로 문장 추가 화면으로 라우팅.
-          },
+          // 현재 책이 선택된 상태로 CP-001 방법 선택 화면으로 이동한다.
+          onPressed: () => context.push(AppRoutes.captureMethodOf(book.bookId)),
         ),
       ],
     );
