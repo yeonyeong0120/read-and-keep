@@ -225,12 +225,18 @@ final class GeminiClientProvider
 
 String _$geminiClientHash() => r'bc18b16c5a6ed019feeeb1c616ce4b8899ba4f86';
 
-/// 추천 1차 LLM(구절 분석) 서비스. keepAlive 로 단일 인스턴스를 유지한다.
+/// 추천 LLM 서비스(1차 구절 분석 + 2차 도서 랭킹). keepAlive 로 단일 유지.
+///
+/// 2차 랭킹의 후보 수집에 카카오 검색이 필요해 [bookRepositoryProvider] 를
+/// 함께 주입한다.
 
 @ProviderFor(recommendationAiService)
 final recommendationAiServiceProvider = RecommendationAiServiceProvider._();
 
-/// 추천 1차 LLM(구절 분석) 서비스. keepAlive 로 단일 인스턴스를 유지한다.
+/// 추천 LLM 서비스(1차 구절 분석 + 2차 도서 랭킹). keepAlive 로 단일 유지.
+///
+/// 2차 랭킹의 후보 수집에 카카오 검색이 필요해 [bookRepositoryProvider] 를
+/// 함께 주입한다.
 
 final class RecommendationAiServiceProvider
     extends
@@ -240,7 +246,10 @@ final class RecommendationAiServiceProvider
           RecommendationAiService
         >
     with $Provider<RecommendationAiService> {
-  /// 추천 1차 LLM(구절 분석) 서비스. keepAlive 로 단일 인스턴스를 유지한다.
+  /// 추천 LLM 서비스(1차 구절 분석 + 2차 도서 랭킹). keepAlive 로 단일 유지.
+  ///
+  /// 2차 랭킹의 후보 수집에 카카오 검색이 필요해 [bookRepositoryProvider] 를
+  /// 함께 주입한다.
   RecommendationAiServiceProvider._()
     : super(
         from: null,
@@ -276,4 +285,75 @@ final class RecommendationAiServiceProvider
 }
 
 String _$recommendationAiServiceHash() =>
-    r'bb2751e099a06d0d99a4d04096d404224dab9131';
+    r'fe0d1d0a9de763fc880cf35ce9c7c3cf2a3db160';
+
+/// 전체 추천 생성 Notifier(1차 분석 → 후보 수집 → 2차 랭킹 → 캐시 저장).
+///
+/// build 는 즉시 완료(idle)하며, 진입만으로는 생성이 일어나지 않는다. UI 의
+/// 명시적 액션(첫 진입/갱신 버튼)에서 [generate] 를 호출해야 파이프라인이 돈다.
+/// 에러는 state 로 전파하고(UI 가 AsyncValue.when 처리), state 할당만
+/// ref.mounted 로 가드한다.
+
+@ProviderFor(RecommendationGenerator)
+final recommendationGeneratorProvider = RecommendationGeneratorProvider._();
+
+/// 전체 추천 생성 Notifier(1차 분석 → 후보 수집 → 2차 랭킹 → 캐시 저장).
+///
+/// build 는 즉시 완료(idle)하며, 진입만으로는 생성이 일어나지 않는다. UI 의
+/// 명시적 액션(첫 진입/갱신 버튼)에서 [generate] 를 호출해야 파이프라인이 돈다.
+/// 에러는 state 로 전파하고(UI 가 AsyncValue.when 처리), state 할당만
+/// ref.mounted 로 가드한다.
+final class RecommendationGeneratorProvider
+    extends $AsyncNotifierProvider<RecommendationGenerator, void> {
+  /// 전체 추천 생성 Notifier(1차 분석 → 후보 수집 → 2차 랭킹 → 캐시 저장).
+  ///
+  /// build 는 즉시 완료(idle)하며, 진입만으로는 생성이 일어나지 않는다. UI 의
+  /// 명시적 액션(첫 진입/갱신 버튼)에서 [generate] 를 호출해야 파이프라인이 돈다.
+  /// 에러는 state 로 전파하고(UI 가 AsyncValue.when 처리), state 할당만
+  /// ref.mounted 로 가드한다.
+  RecommendationGeneratorProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'recommendationGeneratorProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$recommendationGeneratorHash();
+
+  @$internal
+  @override
+  RecommendationGenerator create() => RecommendationGenerator();
+}
+
+String _$recommendationGeneratorHash() =>
+    r'7736a07c15530922cd9162c012c4ed54cf5e1f3d';
+
+/// 전체 추천 생성 Notifier(1차 분석 → 후보 수집 → 2차 랭킹 → 캐시 저장).
+///
+/// build 는 즉시 완료(idle)하며, 진입만으로는 생성이 일어나지 않는다. UI 의
+/// 명시적 액션(첫 진입/갱신 버튼)에서 [generate] 를 호출해야 파이프라인이 돈다.
+/// 에러는 state 로 전파하고(UI 가 AsyncValue.when 처리), state 할당만
+/// ref.mounted 로 가드한다.
+
+abstract class _$RecommendationGenerator extends $AsyncNotifier<void> {
+  FutureOr<void> build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<AsyncValue<void>, void>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AsyncValue<void>, void>,
+              AsyncValue<void>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
