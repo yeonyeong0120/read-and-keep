@@ -53,11 +53,13 @@ class BookRepository {
   /// 책장 목록 스트림.
   ///
   /// recentRecord 는 모든 문서에 존재하는 lastSelectedAt 로 1차 정렬한 뒤,
-  /// lastCapturedAt 가 있으면 그 값을 우선해 클라이언트에서 재정렬한다.
+  /// "최근 기록 시각"(updatedAt ?? lastCapturedAt ?? lastSelectedAt = lastRecordAt)
+  /// 기준으로 클라이언트에서 재정렬한다. 구절을 저장/수정/삭제하면 updatedAt 이
+  /// 갱신되어 그 책이 맨 위로 온다.
   Stream<List<Book>> watchBooks({BookSort sort = BookSort.recentRecord}) {
     final Query<Map<String, dynamic>> query = switch (sort) {
       BookSort.captureCount =>
-        _booksRef.orderBy('captureCount', descending: true),
+        _booksRef.orderBy('savedQuoteCount', descending: true),
       BookSort.title => _booksRef.orderBy('title'),
       BookSort.recentRecord =>
         _booksRef.orderBy('lastSelectedAt', descending: true),
@@ -66,11 +68,7 @@ class BookRepository {
     return query.snapshots().map((snapshot) {
       final books = snapshot.docs.map(Book.fromFirestore).toList();
       if (sort == BookSort.recentRecord) {
-        books.sort((a, b) {
-          final aTime = a.lastCapturedAt ?? a.lastSelectedAt;
-          final bTime = b.lastCapturedAt ?? b.lastSelectedAt;
-          return bTime.compareTo(aTime);
-        });
+        books.sort((a, b) => b.lastRecordAt.compareTo(a.lastRecordAt));
       }
       return books;
     });

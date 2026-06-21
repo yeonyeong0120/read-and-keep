@@ -17,4 +17,8 @@ abstract final class AiConfig {
 
   /// 추천 분석 시 우선 고려할 최근 기간(일). 최근 30일을 우선한다.
   static const int recommendationAnalysisDays = 30;
+
+  /// 데모 폴백 스위치. 결제/쿼터 이슈로 LLM 호출이 막히면 true 로 바꿔
+  /// mock 추천 데이터를 사용한다(LLM 호출 없이 동일 형식의 결과 반환).
+  static const bool useMockRecommendation = false;
 }

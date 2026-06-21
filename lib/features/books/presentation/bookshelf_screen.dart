@@ -240,7 +240,7 @@ class _ShelfBookCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final recordTime = book.lastCapturedAt ?? book.lastSelectedAt;
+    final recordTime = book.lastRecordAt;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),

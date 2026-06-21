@@ -76,7 +76,7 @@ class KakaoBook {
       createdAt: now,
       lastSelectedAt: now,
       lastCapturedAt: null,
-      captureCount: 0,
+      savedQuoteCount: 0,
     );
   }
 }

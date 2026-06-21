@@ -216,7 +216,7 @@ class _HomeBookCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final recordTime = book.lastCapturedAt ?? book.lastSelectedAt;
+    final recordTime = book.lastRecordAt;
 
     return GestureDetector(
       onTap: onTap,
