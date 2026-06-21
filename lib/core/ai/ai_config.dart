@@ -9,6 +9,10 @@ abstract final class AiConfig {
   /// 사용하는 Gemini 모델명. 모델 종료 시 이 한 줄만 교체하면 된다.
   static const String geminiModel = 'gemini-3.1-flash-lite';
 
+  /// 보조 FirebaseApp 이름. Gemini 호출 전용 보조 프로젝트(read-and-keep-ai)를
+  /// 가리킨다. 데이터(Firestore/Storage/Auth)는 기본 앱을 그대로 쓴다.
+  static const String aiAppName = 'aiApp';
+
   /// 추천 활성화 최소 책 수.
   static const int recommendationMinBooks = 1;
 
