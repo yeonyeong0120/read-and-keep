@@ -76,7 +76,7 @@ class _BookshelfOverviewScreenState
     switch (_sortType) {
       case _BookshelfSortType.recent:
         filtered.sort(
-          (a, b) => b.lastSelectedAt.compareTo(a.lastSelectedAt),
+          (a, b) => b.lastRecordAt.compareTo(a.lastRecordAt),
         );
         break;
       case _BookshelfSortType.captureCount:
@@ -317,7 +317,7 @@ class _BookListCard extends StatelessWidget {
                     ],
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      '저장한 구절 ${book.captureCount}개 · 최근 기록 ${bookRelativeTime(book.lastSelectedAt)}',
+                      '저장한 구절 ${book.captureCount}개 · 최근 기록 ${bookRelativeTime(book.lastRecordAt)}',
                       style: AppTextStyles.caption,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
