@@ -178,3 +178,102 @@ final class DriftStatusProvider
 }
 
 String _$driftStatusHash() => r'9d6ea3c0389f25e8c48f0508ec4a91c59b010c6a';
+
+/// Gemini 호출 클라이언트. keepAlive 로 앱 수명 동안 단일 인스턴스를 유지한다.
+
+@ProviderFor(geminiClient)
+final geminiClientProvider = GeminiClientProvider._();
+
+/// Gemini 호출 클라이언트. keepAlive 로 앱 수명 동안 단일 인스턴스를 유지한다.
+
+final class GeminiClientProvider
+    extends $FunctionalProvider<GeminiClient, GeminiClient, GeminiClient>
+    with $Provider<GeminiClient> {
+  /// Gemini 호출 클라이언트. keepAlive 로 앱 수명 동안 단일 인스턴스를 유지한다.
+  GeminiClientProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'geminiClientProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$geminiClientHash();
+
+  @$internal
+  @override
+  $ProviderElement<GeminiClient> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  GeminiClient create(Ref ref) {
+    return geminiClient(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(GeminiClient value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<GeminiClient>(value),
+    );
+  }
+}
+
+String _$geminiClientHash() => r'bc18b16c5a6ed019feeeb1c616ce4b8899ba4f86';
+
+/// 추천 1차 LLM(구절 분석) 서비스. keepAlive 로 단일 인스턴스를 유지한다.
+
+@ProviderFor(recommendationAiService)
+final recommendationAiServiceProvider = RecommendationAiServiceProvider._();
+
+/// 추천 1차 LLM(구절 분석) 서비스. keepAlive 로 단일 인스턴스를 유지한다.
+
+final class RecommendationAiServiceProvider
+    extends
+        $FunctionalProvider<
+          RecommendationAiService,
+          RecommendationAiService,
+          RecommendationAiService
+        >
+    with $Provider<RecommendationAiService> {
+  /// 추천 1차 LLM(구절 분석) 서비스. keepAlive 로 단일 인스턴스를 유지한다.
+  RecommendationAiServiceProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'recommendationAiServiceProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$recommendationAiServiceHash();
+
+  @$internal
+  @override
+  $ProviderElement<RecommendationAiService> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  RecommendationAiService create(Ref ref) {
+    return recommendationAiService(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(RecommendationAiService value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<RecommendationAiService>(value),
+    );
+  }
+}
+
+String _$recommendationAiServiceHash() =>
+    r'bb2751e099a06d0d99a4d04096d404224dab9131';

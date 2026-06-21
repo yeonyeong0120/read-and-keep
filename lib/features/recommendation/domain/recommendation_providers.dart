@@ -1,7 +1,9 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/ai/gemini_client.dart';
 import '../../books/domain/book_providers.dart';
 import '../data/models/recommendation_cache.dart';
+import '../data/recommendation_ai_service.dart';
 import '../data/repositories/recommendation_repository.dart';
 import 'drift_status.dart';
 
@@ -44,5 +46,17 @@ Future<DriftStatus> driftStatus(Ref ref) async {
   );
 }
 
-// LLM 호출 Notifier 는 이번 단계(RC-A)에서 만들지 않는다.
-// TODO: RC-B 에서 추천 생성 AsyncNotifier 를 추가한다.
+/// Gemini 호출 클라이언트. keepAlive 로 앱 수명 동안 단일 인스턴스를 유지한다.
+@Riverpod(keepAlive: true)
+GeminiClient geminiClient(Ref ref) {
+  return GeminiClient();
+}
+
+/// 추천 1차 LLM(구절 분석) 서비스. keepAlive 로 단일 인스턴스를 유지한다.
+@Riverpod(keepAlive: true)
+RecommendationAiService recommendationAiService(Ref ref) {
+  return RecommendationAiService(ref.watch(geminiClientProvider));
+}
+
+// 2차 랭킹 + 전체 생성 Notifier 는 RC-B-2b 에서 추가한다(이번엔 1차 서비스까지).
+// TODO: RC-B-2b 에서 2차 랭킹 + 전체 생성 AsyncNotifier 추가.
