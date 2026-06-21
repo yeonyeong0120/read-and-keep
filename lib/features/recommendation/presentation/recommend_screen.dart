@@ -30,6 +30,10 @@ class _RecommendScreenState extends ConsumerState<RecommendScreen> {
   String? _analysisText;
   String? _analysisError;
 
+  bool _isGenerating = false;
+  String? _generateText;
+  String? _generateError;
+
   Future<void> _runGeminiTest() async {
     setState(() {
       _isTesting = true;
@@ -90,6 +94,45 @@ class _RecommendScreenState extends ConsumerState<RecommendScreen> {
     } finally {
       if (mounted) {
         setState(() => _isAnalyzing = false);
+      }
+    }
+  }
+
+  Future<void> _runGenerateTest() async {
+    setState(() {
+      _isGenerating = true;
+      _generateText = null;
+      _generateError = null;
+    });
+
+    try {
+      // 1→2차 전체 추천 파이프라인 실행.
+      await ref.read(recommendationGeneratorProvider.notifier).generate();
+
+      // 생성 Notifier 에 에러가 담겼으면 그대로 표면화한다.
+      final genState = ref.read(recommendationGeneratorProvider);
+      if (genState.hasError) {
+        throw genState.error!;
+      }
+
+      // 저장된 캐시를 읽어 결과를 표시한다(2차 검증본 확인).
+      final cache = await ref.read(recommendationRepositoryProvider).getCache();
+      final pick = cache?.todaysPick;
+      final text = cache == null
+          ? '저장된 추천이 없습니다.'
+          : '오늘의 추천: '
+              '${pick == null ? '(없음)' : '${pick.title} — ${pick.reason}'}\n'
+              '함께 추천: ${cache.alsoRecommended.length}권';
+      debugPrint('전체 추천 생성 결과: $text');
+      if (!mounted) return;
+      setState(() => _generateText = text);
+    } catch (e) {
+      debugPrint('전체 추천 생성 오류: $e');
+      if (!mounted) return;
+      setState(() => _generateError = '$e');
+    } finally {
+      if (mounted) {
+        setState(() => _isGenerating = false);
       }
     }
   }
@@ -171,6 +214,40 @@ class _RecommendScreenState extends ConsumerState<RecommendScreen> {
                 _ResultBox(
                   label: '분석 오류',
                   message: _analysisError!,
+                  color: AppColors.surfaceVariant,
+                ),
+              ],
+
+              const SizedBox(height: AppSpacing.lg),
+
+              // TODO: RC-C 에서 제거 — 전체 추천 생성(1→2차) 테스트 임시 UI.
+              FilledButton.icon(
+                onPressed: _isGenerating ? null : _runGenerateTest,
+                icon: _isGenerating
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.onPrimary,
+                        ),
+                      )
+                    : const Icon(Icons.auto_awesome_rounded),
+                label: Text(_isGenerating ? '생성 중...' : '전체 추천 생성 테스트'),
+              ),
+              if (_generateText != null) ...[
+                const SizedBox(height: AppSpacing.lg),
+                _ResultBox(
+                  label: '전체 추천 생성 결과',
+                  message: _generateText!,
+                  color: AppColors.surfaceVariant,
+                ),
+              ],
+              if (_generateError != null) ...[
+                const SizedBox(height: AppSpacing.lg),
+                _ResultBox(
+                  label: '생성 오류',
+                  message: _generateError!,
                   color: AppColors.surfaceVariant,
                 ),
               ],
