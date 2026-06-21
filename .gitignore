@@ -54,3 +54,6 @@ ios/Flutter/flutter_export_environment.sh
 
 # 개인 미리보기·실험용 파일 (커밋 제외)
 lib/main_preview.dart
+
+# 보조 AI Firebase 프로젝트 설정 원본 (값은 lib/core/ai/ai_firebase_options.dart 에 반영됨)
+docs/google-services.json
