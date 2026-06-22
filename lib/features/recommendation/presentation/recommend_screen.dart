@@ -40,6 +40,13 @@ class RecommendScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('추천'),
+        actions: [
+          IconButton(
+            tooltip: '추천 기준',
+            icon: const Icon(Icons.info_outline_rounded),
+            onPressed: () => context.push(AppRoutes.recommendCriteria),
+          ),
+        ],
       ),
       body: SafeArea(
         child: ListView(
@@ -288,7 +295,11 @@ class _ResultView extends ConsumerWidget {
               const SizedBox(height: AppSpacing.xl),
               const _SectionTitle('오늘의 추천'),
               const SizedBox(height: AppSpacing.md),
-              _RecommendedBookCard(book: _toCardBook(pick)),
+              _RecommendedBookCard(
+                book: _toCardBook(pick),
+                onTap: () =>
+                    context.push(AppRoutes.recommendDetail, extra: pick),
+              ),
             ],
             if (cache.alsoRecommended.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.xl),
@@ -297,7 +308,11 @@ class _ResultView extends ConsumerWidget {
               ...cache.alsoRecommended.map(
                 (book) => Padding(
                   padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                  child: _RecommendedBookCard(book: _toCardBook(book)),
+                  child: _RecommendedBookCard(
+                    book: _toCardBook(book),
+                    onTap: () =>
+                        context.push(AppRoutes.recommendDetail, extra: book),
+                  ),
                 ),
               ),
             ],
@@ -573,9 +588,13 @@ class _RecommendErrorView extends StatelessWidget {
 class _RecommendedBookCard extends StatelessWidget {
   const _RecommendedBookCard({
     required this.book,
+    this.onTap,
   });
 
   final _RecommendedBook book;
+
+  /// 카드 탭 시 RC-003 추천 상세로 이동.
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -585,8 +604,7 @@ class _RecommendedBookCard extends StatelessWidget {
     ].join(' · ');
 
     return InkWell(
-      // TODO: RC-003 추천 상세로 이동 (RC-C-2 에서 라우트 생성 예정).
-      onTap: () {},
+      onTap: onTap,
       borderRadius: AppRadius.lgRadius,
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.lg),

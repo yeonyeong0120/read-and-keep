@@ -62,6 +62,13 @@ abstract final class AppRoutes {
   /// 추천 탭 (RC).
   static const String recommend = '/recommend';
 
+  /// 추천 상세 (RC-003). 추천 브랜치 하위(탭바 유지).
+  /// 실제 GoRoute path 는 '/recommend/detail'. extra 로 [RecommendedBook] 를 넘긴다.
+  static const String recommendDetail = '/recommend/detail';
+
+  /// 추천 기준 (RC-002). 셸 바깥 최상위(탭바 숨김, 풀스크린). extra 없음.
+  static const String recommendCriteria = '/recommend-criteria';
+
   /// 트렌드 탭 (TR).
   static const String trend = '/trend';
 

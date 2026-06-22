@@ -22,6 +22,9 @@ import '../features/captures/presentation/capture_edit_screen.dart';
 import '../features/captures/presentation/capture_method_screen.dart';
 import '../features/captures/presentation/gallery_ocr_screen.dart';
 import '../features/home/presentation/home_screen.dart';
+import '../features/recommendation/data/models/recommendation_cache.dart';
+import '../features/recommendation/presentation/recommend_criteria_screen.dart';
+import '../features/recommendation/presentation/recommend_detail_screen.dart';
 import '../features/recommendation/presentation/recommend_screen.dart';
 import '../features/trend/data/models/public_capture.dart';
 import '../features/trend/presentation/public_capture_detail_screen.dart';
@@ -149,6 +152,17 @@ GoRouter router(Ref ref) {
               GoRoute(
                 path: AppRoutes.recommend,
                 builder: (context, state) => const RecommendScreen(),
+                // 추천 상세는 추천 브랜치 하위에 두어 탭바를 유지한다.
+                routes: [
+                  GoRoute(
+                    path: 'detail',
+                    builder: (context, state) {
+                      final book = state.extra! as RecommendedBook;
+
+                      return RecommendDetailScreen(book: book);
+                    },
+                  ),
+                ],
               ),
             ],
           ),
@@ -173,7 +187,11 @@ GoRouter router(Ref ref) {
           ),
         ],
       ),
-      // --- 셸 바깥 최상위(탭바 숨김): 문장 수집 풀스크린 / 댓글 작성 ---
+      // --- 셸 바깥 최상위(탭바 숨김): 추천 기준 / 문장 수집 풀스크린 / 댓글 작성 ---
+      GoRoute(
+        path: AppRoutes.recommendCriteria,
+        builder: (context, state) => const RecommendCriteriaScreen(),
+      ),
       GoRoute(
         path: AppRoutes.cameraOcr,
         builder: (context, state) {
