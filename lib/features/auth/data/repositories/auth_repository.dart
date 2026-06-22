@@ -102,6 +102,21 @@ class AuthRepository {
 
   Future<void> signOut() => _auth.signOut();
 
+  /// 공개 기본 설정([AppUser.publishDefault]) 을 갱신한다.
+  ///
+  /// publishDefault 는 `users/{uid}` 문서 필드이며 [AppUser] 가 직접 읽는 값이다.
+  /// 문서/필드가 없을 수 있으므로 merge 로 생성·갱신한다. 미로그인 시 [StateError].
+  Future<void> updatePublishDefault(bool value) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError('No authenticated user');
+    }
+    await _usersRef.doc(user.uid).set(
+      {'publishDefault': value},
+      SetOptions(merge: true),
+    );
+  }
+
   /// 주어진 Firebase Auth user 의 Firestore 프로필을 읽어 [AppUser] 로 합성.
   ///
   /// 로그인 직후, 또는 authStateChanges 스트림에서 user 가 갱신될 때 호출된다.

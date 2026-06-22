@@ -59,6 +59,24 @@ class CaptureRepository {
     return _firestore.collection('publicCaptures').doc(captureId);
   }
 
+  /// 현재 사용자가 공개한 구절 수.
+  ///
+  /// publicCaptures 최상위 컬렉션을 userId 로 필터링한 count() 집계 1회로 구한다.
+  /// publicCaptures 는 공개/비공개 전환 시 정확히 생성·삭제되므로 "공개한 구절 수"의
+  /// 단일 진실이며, 책별 captures 순회보다 가볍다. userId 단일 등가 필터라 자동
+  /// 단일 필드 인덱스로 동작하고 별도 복합 인덱스가 필요 없다.
+  Future<int> countPublicCaptures() async {
+    final userId = _uid;
+
+    final query = _firestore
+        .collection('publicCaptures')
+        .where('userId', isEqualTo: userId);
+
+    final snapshot = await query.count().get();
+
+    return snapshot.count ?? 0;
+  }
+
   /// 특정 책에 저장된 구절 목록 실시간 조회.
   Stream<List<Capture>> watchCapturesByBook(String bookId) {
     final userId = _uid;

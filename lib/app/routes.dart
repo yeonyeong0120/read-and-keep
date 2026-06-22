@@ -72,6 +72,14 @@ abstract final class AppRoutes {
   /// 트렌드 탭 (TR).
   static const String trend = '/trend';
 
+  // --- 마이페이지 (MY) ---
+
+  /// 마이페이지 허브 (MY-001). 홈 브랜치 하위(탭바 유지).
+  static const String mypage = '/mypage';
+
+  /// 로그아웃 확인 (MY-007). 홈 브랜치 하위(탭바 유지). 풀스크린 톤.
+  static const String logoutConfirm = '/logout-confirm';
+
   // --- 책 관리 (BK) ---
 
   /// 책 선택 화면 (BK-001). 홈 브랜치 하위(탭바 유지).
