@@ -51,6 +51,7 @@ class RecommendedBook {
     required this.bookId,
     required this.title,
     required this.author,
+    required this.coverUrl,
     required this.reason,
     required this.linkedCaptureIds,
     required this.themeMatch,
@@ -60,6 +61,10 @@ class RecommendedBook {
   final String bookId;
   final String title;
   final String author;
+
+  /// 표지 이미지 URL. 환각 차단 단계에서 카카오 후보(thumbnail)로 채운다.
+  /// 후보에 표지가 없으면 빈 문자열(화면이 빈 표지 위젯으로 처리).
+  final String coverUrl;
   final String reason;
   final List<String> linkedCaptureIds;
   final String themeMatch;
@@ -70,6 +75,7 @@ class RecommendedBook {
       bookId: json['bookId'] as String? ?? '',
       title: json['title'] as String? ?? '',
       author: json['author'] as String? ?? '',
+      coverUrl: json['coverUrl'] as String? ?? '',
       reason: json['reason'] as String? ?? '',
       linkedCaptureIds: _stringList(json['linkedCaptureIds']),
       themeMatch: json['themeMatch'] as String? ?? '',
@@ -82,6 +88,7 @@ class RecommendedBook {
       'bookId': bookId,
       'title': title,
       'author': author,
+      'coverUrl': coverUrl,
       'reason': reason,
       'linkedCaptureIds': linkedCaptureIds,
       'themeMatch': themeMatch,
