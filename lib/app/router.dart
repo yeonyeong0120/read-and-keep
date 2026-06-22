@@ -22,8 +22,10 @@ import '../features/captures/presentation/capture_edit_screen.dart';
 import '../features/captures/presentation/capture_method_screen.dart';
 import '../features/captures/presentation/gallery_ocr_screen.dart';
 import '../features/home/presentation/home_screen.dart';
+import '../features/mypage/presentation/account_screen.dart';
 import '../features/mypage/presentation/logout_confirm_screen.dart';
 import '../features/mypage/presentation/mypage_screen.dart';
+import '../features/mypage/presentation/withdrawal_screen.dart';
 import '../features/recommendation/data/models/recommendation_cache.dart';
 import '../features/recommendation/presentation/recommend_criteria_screen.dart';
 import '../features/recommendation/presentation/recommend_detail_screen.dart';
@@ -154,6 +156,16 @@ GoRouter router(Ref ref) {
                   GoRoute(
                     path: 'logout-confirm',
                     builder: (context, state) => const LogoutConfirmScreen(),
+                  ),
+                  // MY-003 계정 관리. 홈 브랜치 하위라 탭바를 유지한다.
+                  GoRoute(
+                    path: 'account',
+                    builder: (context, state) => const AccountScreen(),
+                  ),
+                  // MY-008 회원 탈퇴. 홈 브랜치 하위라 탭바를 유지한다.
+                  GoRoute(
+                    path: 'withdrawal',
+                    builder: (context, state) => const WithdrawalScreen(),
                   ),
                 ],
               ),

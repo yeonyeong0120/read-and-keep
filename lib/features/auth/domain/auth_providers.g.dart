@@ -198,7 +198,7 @@ final class AuthNotifierProvider
   AuthNotifier create() => AuthNotifier();
 }
 
-String _$authNotifierHash() => r'a98597ba721e58d90a71bf3f5f6e3afb864ab2a2';
+String _$authNotifierHash() => r'e4c6c1817ac108b9c11e6284b39fed481c116500';
 
 /// 인증 관련 사용자 액션을 수행하는 AsyncNotifier.
 ///

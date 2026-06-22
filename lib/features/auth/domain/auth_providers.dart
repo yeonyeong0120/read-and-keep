@@ -96,6 +96,21 @@ class AuthNotifier extends _$AuthNotifier {
     state = result;
   }
 
+  /// 닉네임 변경. (MY-003 계정 관리)
+  ///
+  /// 성공 시 [currentAppUserProvider] 를 무효화해 새 닉네임을 다시 읽게 한다.
+  Future<void> updateNickname(String nickname) async {
+    state = const AsyncLoading();
+    final result = await AsyncValue.guard(
+      () => ref.read(authRepositoryProvider).updateNickname(nickname),
+    );
+    if (!ref.mounted) return;
+    state = result;
+    if (!result.hasError) {
+      ref.invalidate(currentAppUserProvider);
+    }
+  }
+
   /// 공개 기본 설정(publishDefault) 토글. (MY-001 설정)
   ///
   /// 성공 시 [currentAppUserProvider] 를 무효화해 새 값을 다시 읽게 한다.
