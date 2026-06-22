@@ -111,9 +111,7 @@ class _GreetingHeader extends ConsumerWidget {
         ),
         const SizedBox(width: AppSpacing.md),
         IconButton(
-          onPressed: () {
-            // TODO(MY-001): 마이페이지로 라우팅.
-          },
+          onPressed: () => context.push(AppRoutes.mypage),
           icon: const Icon(Icons.person_outline_rounded),
           color: AppColors.textPrimary,
           iconSize: 28,

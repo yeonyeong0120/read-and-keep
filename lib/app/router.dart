@@ -22,6 +22,8 @@ import '../features/captures/presentation/capture_edit_screen.dart';
 import '../features/captures/presentation/capture_method_screen.dart';
 import '../features/captures/presentation/gallery_ocr_screen.dart';
 import '../features/home/presentation/home_screen.dart';
+import '../features/mypage/presentation/logout_confirm_screen.dart';
+import '../features/mypage/presentation/mypage_screen.dart';
 import '../features/recommendation/data/models/recommendation_cache.dart';
 import '../features/recommendation/presentation/recommend_criteria_screen.dart';
 import '../features/recommendation/presentation/recommend_detail_screen.dart';
@@ -142,6 +144,16 @@ GoRouter router(Ref ref) {
                         bookCoverUrl: args.bookCoverUrl,
                       );
                     },
+                  ),
+                  // MY-001 마이페이지 허브. 홈 브랜치 하위라 탭바를 유지한다.
+                  GoRoute(
+                    path: 'mypage',
+                    builder: (context, state) => const MypageScreen(),
+                  ),
+                  // MY-007 로그아웃 확인. 명세상 하단 탭이 노출되므로 홈 브랜치 하위에 둔다.
+                  GoRoute(
+                    path: 'logout-confirm',
+                    builder: (context, state) => const LogoutConfirmScreen(),
                   ),
                 ],
               ),

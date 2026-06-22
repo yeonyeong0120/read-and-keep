@@ -96,6 +96,23 @@ class AuthNotifier extends _$AuthNotifier {
     state = result;
   }
 
+  /// 공개 기본 설정(publishDefault) 토글. (MY-001 설정)
+  ///
+  /// 성공 시 [currentAppUserProvider] 를 무효화해 새 값을 다시 읽게 한다.
+  /// currentAppUser 는 authState 변화에만 재조회하는 1회성 read 이므로,
+  /// 설정 변경 후 UI 반영을 위해 명시적 invalidate 가 필요하다.
+  Future<void> setPublishDefault(bool value) async {
+    state = const AsyncLoading();
+    final result = await AsyncValue.guard(
+      () => ref.read(authRepositoryProvider).updatePublishDefault(value),
+    );
+    if (!ref.mounted) return;
+    state = result;
+    if (!result.hasError) {
+      ref.invalidate(currentAppUserProvider);
+    }
+  }
+
   Future<void> sendPasswordResetEmail({required String email}) async {
     state = const AsyncLoading();
     final result = await AsyncValue.guard(
