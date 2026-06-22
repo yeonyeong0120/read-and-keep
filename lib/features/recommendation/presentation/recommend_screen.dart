@@ -1,487 +1,50 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/ai/ai_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../books/data/models/kakao_book.dart';
-import '../../books/data/repositories/book_repository.dart';
-import '../../captures/data/models/capture.dart';
-import '../data/services/gemini_recommendation_service.dart';
+import '../data/models/recommendation_cache.dart';
+import '../domain/recommendation_providers.dart';
 
-enum _RecommendState {
-  ready,
-  loading,
-  insufficient,
-  success,
-  error,
-}
-
-class RecommendScreen extends StatefulWidget {
+/// 추천(RC) 화면.
+///
+/// 화면 레이아웃/카드는 기존 그대로 두고, 추천 데이터 소스만 교체했다.
+/// - 생성 트리거: [recommendationGeneratorProvider] 의 generate()
+///   (1차 분석 → 후보 수집 → 2차 랭킹 → 캐시 저장).
+/// - 결과 표시: [recommendationCacheProvider](RecommendationCache?) 를 구독해
+///   화면 카드용 [_RecommendedBook] 으로 변환(어댑터)해서 그린다.
+/// 로딩/에러는 Provider 의 AsyncValue 로만 다루고(수동 플래그 없음), 표시 문구
+/// 구분용 화면 상태만 [_generatedThisSession] 으로 둔다.
+class RecommendScreen extends ConsumerStatefulWidget {
   const RecommendScreen({super.key});
 
   @override
-  State<RecommendScreen> createState() => _RecommendScreenState();
+  ConsumerState<RecommendScreen> createState() => _RecommendScreenState();
 }
 
-class _RecommendScreenState extends State<RecommendScreen> {
-  final BookRepository _bookRepository = BookRepository();
-  final GeminiRecommendationService _geminiService =
-      GeminiRecommendationService();
-
-  _RecommendState _state = _RecommendState.ready;
-
-  String? _errorMessage;
-  int _captureCount = 0;
-  bool _isCachedResult = false;
-  bool _usedGeminiResult = false;
-
-  List<Capture> _captures = const [];
-  List<_RecommendedBook> _recommendations = const [];
-
-  @override
-  void initState() {
-    super.initState();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadCachedRecommendations();
-    });
-  }
-
-  Future<void> _loadCachedRecommendations() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser ??
-          await FirebaseAuth.instance.authStateChanges().first;
-
-      if (user == null) {
-        return;
-      }
-
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('recommendations')
-          .doc('latest')
-          .get();
-
-      if (!doc.exists) {
-        return;
-      }
-
-      final data = doc.data();
-      if (data == null) {
-        return;
-      }
-
-      final rawBooks = data['books'] as List<dynamic>? ?? const [];
-      final books = rawBooks
-          .whereType<Map<String, dynamic>>()
-          .map((bookMap) {
-            return _RecommendedBook.fromFirestoreMap(bookMap);
-          })
-          .where((book) => book.title.trim().isNotEmpty)
-          .toList();
-
-      if (books.isEmpty) {
-        return;
-      }
-
-      if (!mounted) return;
-
-      setState(() {
-        _recommendations = books;
-        _captureCount = data['captureCount'] as int? ?? 0;
-        _usedGeminiResult = data['usedGeminiResult'] as bool? ?? false;
-        _isCachedResult = true;
-        _state = _RecommendState.success;
-      });
-    } catch (e) {
-      debugPrint('추천 결과 캐시 로드 실패: $e');
-    }
-  }
-
-  Future<void> _generateRecommendations() async {
-    if (_state == _RecommendState.loading) return;
-
-    setState(() {
-      _state = _RecommendState.loading;
-      _errorMessage = null;
-      _recommendations = const [];
-      _isCachedResult = false;
-      _usedGeminiResult = false;
-    });
-
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-
-      if (user == null) {
-        setState(() {
-          _state = _RecommendState.error;
-          _errorMessage = '로그인이 필요합니다.';
-        });
-        return;
-      }
-
-      final captures = await _fetchMyCaptures(user.uid);
-
-      _captureCount = captures.length;
-      _captures = captures;
-
-      if (captures.length < 3) {
-        if (!mounted) return;
-
-        setState(() {
-          _state = _RecommendState.insufficient;
-        });
-        return;
-      }
-
-      final recommendationBuildResult =
-          await _buildRecommendationsFromCaptures(captures);
-
-      final enrichedRecommendations = await _enrichRecommendationsWithKakao(
-        recommendationBuildResult.books,
-      );
-
-      await _saveRecommendationCache(
-        uid: user.uid,
-        captures: captures,
-        recommendations: enrichedRecommendations,
-        usedGeminiResult: recommendationBuildResult.usedGeminiResult,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _recommendations = enrichedRecommendations;
-        _usedGeminiResult = recommendationBuildResult.usedGeminiResult;
-        _isCachedResult = false;
-        _state = _RecommendState.success;
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _state = _RecommendState.error;
-        _errorMessage = e.toString();
-      });
-    }
-  }
-
-  Future<List<Capture>> _fetchMyCaptures(String uid) async {
-    final firestore = FirebaseFirestore.instance;
-
-    final booksSnapshot = await firestore
-        .collection('users')
-        .doc(uid)
-        .collection('books')
-        .limit(50)
-        .get();
-
-    final captures = <Capture>[];
-
-    for (final bookDoc in booksSnapshot.docs) {
-      final capturesSnapshot = await firestore
-          .collection('users')
-          .doc(uid)
-          .collection('books')
-          .doc(bookDoc.id)
-          .collection('captures')
-          .orderBy('createdAt', descending: true)
-          .limit(20)
-          .get();
-
-      for (final captureDoc in capturesSnapshot.docs) {
-        captures.add(Capture.fromFirestore(captureDoc));
-      }
-    }
-
-    captures.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-    if (captures.length <= 50) {
-      return captures;
-    }
-
-    return captures.take(50).toList();
-  }
-
-  Future<void> _saveRecommendationCache({
-    required String uid,
-    required List<Capture> captures,
-    required List<_RecommendedBook> recommendations,
-    required bool usedGeminiResult,
-  }) async {
-    try {
-      final previewCaptures = captures.take(3).map((capture) {
-        return {
-          'captureId': capture.id,
-          'bookId': capture.bookId,
-          'bookTitle': capture.bookTitle,
-          'quote': capture.quote,
-          'comment': capture.comment,
-          'createdAt': Timestamp.fromDate(capture.createdAt),
-        };
-      }).toList();
-
-      final books = recommendations.map((book) {
-        return book.toFirestoreMap();
-      }).toList();
-
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .collection('recommendations')
-          .doc('latest')
-          .set(
-        {
-          'captureCount': captures.length,
-          'previewCaptures': previewCaptures,
-          'books': books,
-          'usedGeminiResult': usedGeminiResult,
-          'generatedAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
-    } catch (e) {
-      debugPrint('추천 결과 캐시 저장 실패: $e');
-    }
-  }
-
-  Future<_RecommendationBuildResult> _buildRecommendationsFromCaptures(
-    List<Capture> captures,
-  ) async {
-    try {
-      final candidates = await _geminiService.recommendBooks(
-        captures: captures,
-      );
-
-      if (candidates.isEmpty) {
-        return _RecommendationBuildResult(
-          books: _buildMockRecommendationsFromCaptures(captures),
-          usedGeminiResult: false,
-        );
-      }
-
-      final geminiBooks = candidates.map((candidate) {
-        return _RecommendedBook(
-          title: candidate.title,
-          author: candidate.author,
-          publisher: '',
-          thumbnail: '',
-          keyword: candidate.keyword.trim().isEmpty
-              ? '개인화 추천'
-              : candidate.keyword,
-          reason: candidate.reason.trim().isEmpty
-              ? '저장한 구절의 분위기와 독서 취향을 바탕으로 추천한 책입니다.'
-              : candidate.reason,
-        );
-      }).toList();
-
-      final completedBooks = _completeRecommendationsIfNeeded(
-        geminiBooks,
-        captures,
-      );
-
-      return _RecommendationBuildResult(
-        books: completedBooks,
-        usedGeminiResult: true,
-      );
-    } catch (e) {
-      debugPrint('Gemini 추천 생성 실패: $e');
-
-      return _RecommendationBuildResult(
-        books: _buildMockRecommendationsFromCaptures(captures),
-        usedGeminiResult: false,
-      );
-    }
-  }
-
-  List<_RecommendedBook> _completeRecommendationsIfNeeded(
-    List<_RecommendedBook> geminiBooks,
-    List<Capture> captures,
-  ) {
-    if (geminiBooks.length >= 3) {
-      return geminiBooks.take(3).toList();
-    }
-
-    final fallbackBooks = _buildMockRecommendationsFromCaptures(captures);
-    final merged = <_RecommendedBook>[...geminiBooks];
-
-    for (final fallback in fallbackBooks) {
-      final alreadyExists = merged.any(
-        (book) => _normalizeText(book.title) == _normalizeText(fallback.title),
-      );
-
-      if (!alreadyExists) {
-        merged.add(fallback);
-      }
-
-      if (merged.length >= 3) {
-        break;
-      }
-    }
-
-    return merged.take(3).toList();
-  }
-
-  List<_RecommendedBook> _buildMockRecommendationsFromCaptures(
-    List<Capture> captures,
-  ) {
-    final combinedText = captures
-        .take(10)
-        .map((capture) => '${capture.quote} ${capture.comment}')
-        .join(' ')
-        .toLowerCase();
-
-    final keywords = <String>[];
-
-    void addKeywordIfContains(String keyword, List<String> words) {
-      final matched = words.any((word) => combinedText.contains(word));
-      if (matched && !keywords.contains(keyword)) {
-        keywords.add(keyword);
-      }
-    }
-
-    addKeywordIfContains('위로', ['위로', '괜찮', '버티', '힘들', '따뜻']);
-    addKeywordIfContains('성장', ['성장', '변화', '배움', '꿈', '시작']);
-    addKeywordIfContains('관계', ['사람', '관계', '사랑', '친구', '마음']);
-    addKeywordIfContains('사유', ['생각', '이유', '삶', '시간', '기억']);
-    addKeywordIfContains('감정', ['감정', '슬픔', '기쁨', '외로움', '불안']);
-
-    if (keywords.isEmpty) {
-      keywords.addAll(['문장', '기록', '독서']);
-    }
-
-    final firstKeyword = keywords[0];
-    final secondKeyword = keywords.length > 1 ? keywords[1] : '성장';
-    final thirdKeyword = keywords.length > 2 ? keywords[2] : '사유';
-
-    return [
-      _RecommendedBook(
-        title: '불편한 편의점',
-        author: '김호연',
-        publisher: '',
-        thumbnail: '',
-        keyword: firstKeyword,
-        reason:
-            '저장한 구절에서 따뜻한 시선과 사람 사이의 이야기를 중요하게 보는 경향이 보여요. 편안하게 읽으면서도 여운이 남는 책으로 추천합니다.',
-      ),
-      _RecommendedBook(
-        title: '아몬드',
-        author: '손원평',
-        publisher: '',
-        thumbnail: '',
-        keyword: secondKeyword,
-        reason:
-            '감정, 성장, 타인에 대한 이해와 연결되는 문장을 기록한 흐름이 있어요. 인물의 변화를 따라가며 읽기 좋은 책입니다.',
-      ),
-      _RecommendedBook(
-        title: '여행의 이유',
-        author: '김영하',
-        publisher: '',
-        thumbnail: '',
-        keyword: thirdKeyword,
-        reason:
-            '삶을 돌아보거나 생각을 정리하는 구절을 좋아하는 독자에게 잘 맞아요. 짧은 문장 안에서 사유를 이어가기 좋은 책입니다.',
-      ),
-    ];
-  }
-
-  Future<List<_RecommendedBook>> _enrichRecommendationsWithKakao(
-    List<_RecommendedBook> books,
-  ) async {
-    final enrichedBooks = <_RecommendedBook>[];
-
-    for (final book in books) {
-      final query = '${book.title} ${book.author}'.trim();
-
-      try {
-        final results = await _bookRepository.searchBooks(query);
-        final matched = _findBestKakaoBookMatch(
-          results: results,
-          title: book.title,
-          author: book.author,
-        );
-
-        if (matched == null) {
-          enrichedBooks.add(book);
-          continue;
-        }
-
-        enrichedBooks.add(
-          book.copyWith(
-            title: matched.title.isNotEmpty ? matched.title : book.title,
-            author:
-                matched.authorText.isNotEmpty ? matched.authorText : book.author,
-            publisher: matched.publisher,
-            thumbnail: matched.thumbnail,
-          ),
-        );
-      } catch (e) {
-        debugPrint('카카오 책 검색 보정 실패: $e');
-        enrichedBooks.add(book);
-      }
-    }
-
-    return enrichedBooks;
-  }
-
-  KakaoBook? _findBestKakaoBookMatch({
-    required List<KakaoBook> results,
-    required String title,
-    required String author,
-  }) {
-    if (results.isEmpty) return null;
-
-    final normalizedTitle = _normalizeText(title);
-    final normalizedAuthor = _normalizeText(author);
-
-    for (final book in results) {
-      final resultTitle = _normalizeText(book.title);
-      final resultAuthor = _normalizeText(book.authorText);
-
-      final titleMatched = resultTitle.contains(normalizedTitle) ||
-          normalizedTitle.contains(resultTitle);
-
-      final authorMatched = normalizedAuthor.isEmpty ||
-          resultAuthor.contains(normalizedAuthor) ||
-          normalizedAuthor.contains(resultAuthor);
-
-      if (titleMatched && authorMatched) {
-        return book;
-      }
-    }
-
-    for (final book in results) {
-      final resultTitle = _normalizeText(book.title);
-      final titleMatched = resultTitle.contains(normalizedTitle) ||
-          normalizedTitle.contains(resultTitle);
-
-      if (titleMatched) {
-        return book;
-      }
-    }
-
-    return results.first;
-  }
-
-  String _normalizeText(String value) {
-    return value
-        .replaceAll(RegExp(r'<[^>]*>'), '')
-        .replaceAll(RegExp(r'\s+'), '')
-        .replaceAll('&lt;', '')
-        .replaceAll('&gt;', '')
-        .replaceAll('&amp;', '')
-        .trim()
-        .toLowerCase();
+class _RecommendScreenState extends ConsumerState<RecommendScreen> {
+  /// 이번 세션에서 생성 버튼을 직접 눌렀는지(결과 문구의 "이전/새로" 구분용).
+  /// 비동기 로딩/에러 상태와 무관한 표시 전용 화면 상태다.
+  bool _generatedThisSession = false;
+
+  Future<void> _generate() async {
+    await ref.read(recommendationGeneratorProvider.notifier).generate();
+    if (!mounted) return;
+    setState(() => _generatedThisSession = true);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isLoading = _state == _RecommendState.loading;
+    final generationState = ref.watch(recommendationGeneratorProvider);
+    final cacheState = ref.watch(recommendationCacheProvider);
+
+    final isLoading = generationState.isLoading;
+    final cache = cacheState.asData?.value;
+    final hasResult = cache != null &&
+        (cache.todaysPick != null || cache.alsoRecommended.isNotEmpty);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -499,53 +62,100 @@ class _RecommendScreenState extends State<RecommendScreen> {
             const SizedBox(height: AppSpacing.lg),
             _RecommendActionCard(
               isLoading: isLoading,
-              captureCount: _captureCount,
-              isCachedResult: _isCachedResult,
-              usedGeminiResult: _usedGeminiResult,
-              onGenerate: _generateRecommendations,
+              captureCount: cache?.snapshotCaptureCount ?? 0,
+              isCachedResult: hasResult && !_generatedThisSession,
+              usedGeminiResult: !AiConfig.useMockRecommendation,
+              onGenerate: _generate,
             ),
             const SizedBox(height: AppSpacing.xl),
-            _buildBodyByState(),
+            _buildBody(
+              generationState: generationState,
+              cacheState: cacheState,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBodyByState() {
-    switch (_state) {
-      case _RecommendState.ready:
-        return const _RecommendReadyView();
-
-      case _RecommendState.loading:
-        return const _RecommendLoadingView();
-
-      case _RecommendState.insufficient:
-        return _RecommendInsufficientView(
-          captureCount: _captureCount,
-        );
-
-      case _RecommendState.success:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_captures.isNotEmpty) ...[
-              _AnalyzedQuoteSummary(captures: _captures),
-              const SizedBox(height: AppSpacing.xl),
-            ],
-            _RecommendResultList(
-              books: _recommendations,
-              isCachedResult: _isCachedResult,
-              usedGeminiResult: _usedGeminiResult,
-            ),
-          ],
-        );
-
-      case _RecommendState.error:
-        return _RecommendErrorView(
-          message: _errorMessage ?? '알 수 없는 오류가 발생했어요.',
-        );
+  /// 생성 상태(우선) → 캐시 상태 순으로 본문을 그린다.
+  ///
+  /// 생성 중/실패는 generator 의 AsyncValue 로, 결과 유무는 cache 의 AsyncValue
+  /// 로 판정한다. cache 가 null 이면 아직 생성 전, 결과가 비면 부족 안내를 띄운다.
+  Widget _buildBody({
+    required AsyncValue<void> generationState,
+    required AsyncValue<RecommendationCache?> cacheState,
+  }) {
+    // 1) 생성 중 → 로딩.
+    if (generationState.isLoading) {
+      return const _RecommendLoadingView();
     }
+
+    // 2) 생성 실패 → 에러.
+    if (generationState.hasError) {
+      return _RecommendErrorView(
+        message: generationState.error.toString(),
+      );
+    }
+
+    // 3) 캐시 스트림 상태로 결과를 그린다.
+    return cacheState.when(
+      loading: () => const _RecommendLoadingView(),
+      error: (error, _) => _RecommendErrorView(message: error.toString()),
+      data: (cache) {
+        if (cache == null) {
+          return const _RecommendReadyView();
+        }
+
+        final books = _adaptCacheToBooks(cache);
+        if (books.isEmpty) {
+          return _RecommendInsufficientView(
+            captureCount: cache.snapshotCaptureCount,
+          );
+        }
+
+        return _RecommendResultList(
+          books: books,
+          isCachedResult: !_generatedThisSession,
+          usedGeminiResult: !AiConfig.useMockRecommendation,
+        );
+      },
+    );
+  }
+
+  /// 추천 캐시(todaysPick + alsoRecommended)를 화면 카드용 목록으로 변환한다.
+  /// 오늘의 추천을 맨 앞(대표 추천)에 두고, 함께 추천을 뒤에 잇는다.
+  List<_RecommendedBook> _adaptCacheToBooks(RecommendationCache cache) {
+    final books = <_RecommendedBook>[];
+
+    final pick = cache.todaysPick;
+    if (pick != null) {
+      books.add(_fromRecommendedBook(pick));
+    }
+    for (final book in cache.alsoRecommended) {
+      books.add(_fromRecommendedBook(book));
+    }
+
+    return books;
+  }
+
+  /// 내 [RecommendedBook] → 화면 [_RecommendedBook] 매핑.
+  ///
+  /// 표지는 엔진이 카카오 후보에서 채운 coverUrl 을 그대로 쓴다(화면의 추가
+  /// 카카오 보정 없음). 칩 키워드는 연관 키워드 우선, 없으면 테마 매칭을 쓴다.
+  _RecommendedBook _fromRecommendedBook(RecommendedBook book) {
+    final keyword = book.relatedKeywords.isNotEmpty
+        ? book.relatedKeywords.first
+        : (book.themeMatch.trim().isEmpty ? '개인화 추천' : book.themeMatch);
+
+    return _RecommendedBook(
+      title: book.title,
+      author: book.author,
+      publisher: '',
+      thumbnail: book.coverUrl,
+      keyword: keyword,
+      reason: book.reason,
+    );
   }
 }
 
@@ -801,49 +411,6 @@ class _RecommendErrorView extends StatelessWidget {
   }
 }
 
-class _AnalyzedQuoteSummary extends StatelessWidget {
-  const _AnalyzedQuoteSummary({
-    required this.captures,
-  });
-
-  final List<Capture> captures;
-
-  @override
-  Widget build(BuildContext context) {
-    final previewCaptures = captures.take(3).toList();
-
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.lgRadius,
-        border: Border.all(color: AppColors.outline),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '분석에 사용한 최근 구절',
-            style: AppTextStyles.bodyStrong,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          ...previewCaptures.map(
-            (capture) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: Text(
-                '“${capture.quote}”',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.caption.copyWith(height: 1.4),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _RecommendResultList extends StatelessWidget {
   const _RecommendResultList({
     required this.books,
@@ -1014,16 +581,10 @@ class _EmptyBookCover extends StatelessWidget {
   }
 }
 
-class _RecommendationBuildResult {
-  const _RecommendationBuildResult({
-    required this.books,
-    required this.usedGeminiResult,
-  });
-
-  final List<_RecommendedBook> books;
-  final bool usedGeminiResult;
-}
-
+/// 화면 카드 표시 전용 추천 도서 뷰 모델.
+///
+/// 추천 엔진의 [RecommendedBook] 을 화면이 기대하는 필드 형태로 변환한 값이다
+/// (어댑터 결과). 직렬화/Firestore 접근은 하지 않는다.
 class _RecommendedBook {
   const _RecommendedBook({
     required this.title,
@@ -1040,44 +601,4 @@ class _RecommendedBook {
   final String thumbnail;
   final String reason;
   final String keyword;
-
-  factory _RecommendedBook.fromFirestoreMap(Map<String, dynamic> map) {
-    return _RecommendedBook(
-      title: map['title'] as String? ?? '',
-      author: map['author'] as String? ?? '',
-      publisher: map['publisher'] as String? ?? '',
-      thumbnail: map['thumbnail'] as String? ?? '',
-      reason: map['reason'] as String? ?? '',
-      keyword: map['keyword'] as String? ?? '',
-    );
-  }
-
-  Map<String, dynamic> toFirestoreMap() {
-    return {
-      'title': title,
-      'author': author,
-      'publisher': publisher,
-      'thumbnail': thumbnail,
-      'reason': reason,
-      'keyword': keyword,
-    };
-  }
-
-  _RecommendedBook copyWith({
-    String? title,
-    String? author,
-    String? publisher,
-    String? thumbnail,
-    String? reason,
-    String? keyword,
-  }) {
-    return _RecommendedBook(
-      title: title ?? this.title,
-      author: author ?? this.author,
-      publisher: publisher ?? this.publisher,
-      thumbnail: thumbnail ?? this.thumbnail,
-      reason: reason ?? this.reason,
-      keyword: keyword ?? this.keyword,
-    );
-  }
 }

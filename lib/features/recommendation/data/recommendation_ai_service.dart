@@ -21,12 +21,17 @@ class KakaoBookCandidate {
     required this.bookId,
     required this.title,
     required this.author,
+    required this.coverUrl,
     required this.description,
   });
 
   final String bookId;
   final String title;
   final String author;
+
+  /// 카카오 후보의 표지(thumbnail). 추천 조립 시 [RecommendedBook.coverUrl] 로
+  /// 그대로 옮겨 화면이 표지를 표시하게 한다.
+  final String coverUrl;
   final String description;
 }
 
@@ -281,6 +286,7 @@ class RecommendationAiService {
           bookId: id,
           title: book.title,
           author: book.authorText,
+          coverUrl: book.thumbnail,
           description: book.contents,
         );
       }
@@ -492,6 +498,7 @@ class RecommendationAiService {
         bookId: candidate.bookId,
         title: candidate.title, // LLM 출력이 아닌 카카오 실제 데이터로 채움.
         author: candidate.author,
+        coverUrl: candidate.coverUrl, // 표지도 카카오 후보에서 채움.
         reason: raw.reason,
         linkedCaptureIds: raw.linkedCaptureIds,
         themeMatch: raw.themeMatch,
@@ -531,6 +538,7 @@ class RecommendationAiService {
         bookId: c.bookId,
         title: c.title,
         author: c.author,
+        coverUrl: c.coverUrl,
         reason: reason,
         linkedCaptureIds: const <String>[],
         themeMatch: '취향과 잘 맞는 책',
