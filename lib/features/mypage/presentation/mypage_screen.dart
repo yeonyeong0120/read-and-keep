@@ -114,7 +114,7 @@ class MypageScreen extends ConsumerWidget {
                   _MenuRow(
                     icon: Icons.manage_accounts_outlined,
                     title: '계정 관리',
-                    onTap: () => _showComingSoon(context),
+                    onTap: () => context.push(AppRoutes.account),
                   ),
                 ],
               ),
@@ -151,7 +151,7 @@ class MypageScreen extends ConsumerWidget {
                     icon: Icons.person_remove_outlined,
                     title: '회원 탈퇴',
                     destructive: true,
-                    onTap: () => _showComingSoon(context),
+                    onTap: () => context.push(AppRoutes.withdrawal),
                   ),
                 ],
               ),

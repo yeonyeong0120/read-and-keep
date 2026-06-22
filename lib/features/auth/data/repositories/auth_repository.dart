@@ -102,6 +102,21 @@ class AuthRepository {
 
   Future<void> signOut() => _auth.signOut();
 
+  /// 닉네임([AppUser.nickname]) 을 갱신한다. (MY-003 계정 관리)
+  ///
+  /// `users/{uid}` 문서의 nickname 필드를 merge 로 갱신한다. 미로그인 시 [StateError].
+  /// 입력 검증(공백·길이)은 호출하는 쪽에서 수행한다.
+  Future<void> updateNickname(String nickname) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError('No authenticated user');
+    }
+    await _usersRef.doc(user.uid).set(
+      {'nickname': nickname},
+      SetOptions(merge: true),
+    );
+  }
+
   /// 공개 기본 설정([AppUser.publishDefault]) 을 갱신한다.
   ///
   /// publishDefault 는 `users/{uid}` 문서 필드이며 [AppUser] 가 직접 읽는 값이다.

@@ -80,6 +80,12 @@ abstract final class AppRoutes {
   /// 로그아웃 확인 (MY-007). 홈 브랜치 하위(탭바 유지). 풀스크린 톤.
   static const String logoutConfirm = '/logout-confirm';
 
+  /// 계정 관리 (MY-003). 홈 브랜치 하위(탭바 유지).
+  static const String account = '/account';
+
+  /// 회원 탈퇴 (MY-008). 홈 브랜치 하위(탭바 유지).
+  static const String withdrawal = '/withdrawal';
+
   // --- 책 관리 (BK) ---
 
   /// 책 선택 화면 (BK-001). 홈 브랜치 하위(탭바 유지).
