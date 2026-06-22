@@ -127,37 +127,137 @@ class BookRepository {
 
   /// 카카오 책 검색.
   ///
-  /// 1) 빈 검색어면 빈 리스트. 2) 캐시 히트면 캐시 결과. 3) 미스면 API 호출
-  /// (키 없으면 [StateError]). 4) 응답을 캐시에 저장 후 반환. Dio 예외는 전파한다.
+  /// 개선 사항:
+  /// 1) 기본 검색으로 제목/출판사/키워드 검색을 처리한다.
+  /// 2) target=person 검색을 추가로 호출해 작가명 검색을 보강한다.
+  /// 3) 두 결과를 합치고 ISBN/제목/저자 기준으로 중복 제거한다.
   Future<List<KakaoBook>> searchBooks(String query) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return const [];
 
-    // 캐시 히트: 저장된 원본 map 을 KakaoBook 으로 변환해 반환.
-    final cached = _cache.read(trimmed);
+    // 기존 캐시와 충돌하지 않도록 v2 키를 사용한다.
+    final cacheKey = 'book_search_v2::$trimmed';
+
+    final cached = _cache.read(cacheKey);
     if (cached != null) {
       return cached.map(KakaoBook.fromJson).toList();
     }
 
-    // 키 빈값 방어: 호출 전에 차단한다.
     final apiKey = EnvConfig.kakaoRestApiKey;
     if (apiKey.isEmpty) {
       throw StateError('카카오 API 키가 설정되지 않았습니다');
     }
 
-    final response = await _dio.get<Map<String, dynamic>>(
-      _kakaoSearchUrl,
-      queryParameters: {'query': trimmed, 'sort': 'accuracy', 'size': 20},
-      options: Options(headers: {'Authorization': 'KakaoAK $apiKey'}),
+    // 1차: 기본 검색
+    final generalDocuments = await _fetchKakaoBookDocuments(
+      query: trimmed,
+      apiKey: apiKey,
     );
 
-    final documents =
-        (response.data?['documents'] as List<dynamic>? ?? const [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
+    // 2차: 저자명 검색
+    final authorDocuments = await _fetchKakaoBookDocuments(
+      query: trimmed,
+      apiKey: apiKey,
+      target: 'person',
+    );
 
-    // 캐시에는 원본 document map 을 저장한다.
-    await _cache.write(trimmed, documents);
-    return documents.map(KakaoBook.fromJson).toList();
+    final mergedDocuments = _mergeAndDedupeDocuments([
+      ...authorDocuments,
+      ...generalDocuments,
+    ]);
+
+    await _cache.write(cacheKey, mergedDocuments);
+
+    return mergedDocuments.map(KakaoBook.fromJson).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchKakaoBookDocuments({
+    required String query,
+    required String apiKey,
+    String? target,
+  }) async {
+    final queryParameters = <String, dynamic>{
+      'query': query,
+      'sort': 'accuracy',
+      'size': 20,
+    };
+
+    if (target != null && target.trim().isNotEmpty) {
+      queryParameters['target'] = target;
+    }
+
+    final response = await _dio.get<Map<String, dynamic>>(
+      _kakaoSearchUrl,
+      queryParameters: queryParameters,
+      options: Options(
+        headers: {
+          'Authorization': 'KakaoAK $apiKey',
+        },
+      ),
+    );
+
+    return (response.data?['documents'] as List<dynamic>? ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  List<Map<String, dynamic>> _mergeAndDedupeDocuments(
+    List<Map<String, dynamic>> documents,
+  ) {
+    final result = <Map<String, dynamic>>[];
+    final seenKeys = <String>{};
+
+    for (final document in documents) {
+      final key = _documentUniqueKey(document);
+
+      if (seenKeys.contains(key)) {
+        continue;
+      }
+
+      seenKeys.add(key);
+      result.add(document);
+    }
+
+    return result;
+  }
+
+  String _documentUniqueKey(Map<String, dynamic> document) {
+    final rawIsbn = (document['isbn'] as String? ?? '').trim();
+    final isbnParts = rawIsbn
+        .split(RegExp(r'\s+'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    // 카카오 isbn 값은 "ISBN10 ISBN13" 형태로 오는 경우가 있어 ISBN13을 우선 사용한다.
+    final isbn13 = isbnParts.where((e) => e.length == 13).firstOrNull;
+    if (isbn13 != null && isbn13.isNotEmpty) {
+      return 'isbn13::$isbn13';
+    }
+
+    if (rawIsbn.isNotEmpty) {
+      return 'isbn::$rawIsbn';
+    }
+
+    final title = (document['title'] as String? ?? '').trim().toLowerCase();
+    final authors = (document['authors'] as List<dynamic>? ?? const [])
+        .map((e) => e.toString().trim().toLowerCase())
+        .where((e) => e.isNotEmpty)
+        .join(',');
+
+    final publisher =
+        (document['publisher'] as String? ?? '').trim().toLowerCase();
+
+    return 'fallback::$title::$authors::$publisher';
+  }
+}
+
+extension _FirstOrNullExtension<T> on Iterable<T> {
+  T? get firstOrNull {
+    final iterator = this.iterator;
+    if (iterator.moveNext()) {
+      return iterator.current;
+    }
+    return null;
   }
 }

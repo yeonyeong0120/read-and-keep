@@ -25,6 +25,7 @@ class PublicCaptureDetailScreen extends StatefulWidget {
 
 class _PublicCaptureDetailScreenState extends State<PublicCaptureDetailScreen> {
   bool _isLikeProcessing = false;
+  bool _didTryIncreaseViewCount = false;
 
   DocumentReference<Map<String, dynamic>> get _captureRef {
     return FirebaseFirestore.instance
@@ -58,6 +59,58 @@ class _PublicCaptureDetailScreenState extends State<PublicCaptureDetailScreen> {
         .map((snapshot) {
       return snapshot.docs.map(PublicCaptureComment.fromFirestore).toList();
     });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _increaseViewCountOncePerUser();
+  }
+
+  Future<void> _increaseViewCountOncePerUser() async {
+    if (_didTryIncreaseViewCount) return;
+
+    _didTryIncreaseViewCount = true;
+
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      return;
+    }
+
+    final viewRef = _captureRef.collection('views').doc(user.uid);
+
+    try {
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final viewSnapshot = await transaction.get(viewRef);
+        final captureSnapshot = await transaction.get(_captureRef);
+
+        if (!captureSnapshot.exists) {
+          return;
+        }
+
+        // 이미 이 사용자가 본 글이면 조회수를 다시 올리지 않는다.
+        if (viewSnapshot.exists) {
+          return;
+        }
+
+        transaction.set(viewRef, {
+          'userId': user.uid,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        transaction.set(
+          _captureRef,
+          {
+            'viewCount': FieldValue.increment(1),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      });
+    } catch (_) {
+      // 조회수 처리는 실패해도 화면 이용에는 영향이 없게 무시한다.
+    }
   }
 
   Future<void> _toggleLike() async {
@@ -387,9 +440,11 @@ class _ActionSection extends StatelessWidget {
       stream: captureStream,
       builder: (context, captureSnapshot) {
         final data = captureSnapshot.data?.data();
+
         final likeCount = data?['likeCount'] as int? ?? capture.likeCount;
         final commentCount =
             data?['commentCount'] as int? ?? capture.commentCount;
+        final viewCount = data?['viewCount'] as int? ?? 0;
 
         return StreamBuilder<bool>(
           stream: likedStream,
@@ -404,28 +459,38 @@ class _ActionSection extends StatelessWidget {
                 borderRadius: AppRadius.lgRadius,
                 border: Border.all(color: AppColors.outline),
               ),
-              child: Row(
+              child: Column(
                 children: [
-                  Expanded(
-                    child: _ActionButton(
-                      icon: liked
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_border_rounded,
-                      label: isLikeProcessing ? '처리 중...' : '공감 $likeCount',
-                      selected: liked,
-                      enabled: !isLikeProcessing,
-                      onTap: onLikeTap,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ActionButton(
+                          icon: liked
+                              ? Icons.favorite_rounded
+                              : Icons.favorite_border_rounded,
+                          label:
+                              isLikeProcessing ? '처리 중...' : '공감 $likeCount',
+                          selected: liked,
+                          enabled: !isLikeProcessing,
+                          onTap: onLikeTap,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: _ActionButton(
+                          icon: Icons.chat_bubble_outline_rounded,
+                          label: '댓글 $commentCount',
+                          selected: false,
+                          enabled: true,
+                          onTap: onCommentTap,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: _ActionButton(
-                      icon: Icons.chat_bubble_outline_rounded,
-                      label: '댓글 $commentCount',
-                      selected: false,
-                      enabled: true,
-                      onTap: onCommentTap,
-                    ),
+                  const SizedBox(height: AppSpacing.sm),
+                  _InfoButton(
+                    icon: Icons.visibility_outlined,
+                    label: '조회 $viewCount',
                   ),
                 ],
               ),
@@ -433,6 +498,102 @@ class _ActionSection extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? Colors.red : AppColors.textPrimary;
+    final disabledColor = AppColors.textSecondary;
+
+    return InkWell(
+      borderRadius: AppRadius.mdRadius,
+      onTap: enabled ? onTap : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? Colors.red.withOpacity(0.08) : AppColors.background,
+          borderRadius: AppRadius.mdRadius,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: enabled ? color : disabledColor,
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Text(
+              label,
+              style: AppTextStyles.caption.copyWith(
+                color: enabled ? color : disabledColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoButton extends StatelessWidget {
+  const _InfoButton({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: AppRadius.mdRadius,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            size: 18,
+            color: AppColors.textSecondary,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            label,
+            style: AppTextStyles.caption.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -492,7 +653,10 @@ class _CommentListSection extends StatelessWidget {
                   children: comments.map((comment) {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                      child: _CommentCard(comment: comment),
+                      child: _CommentCard(
+                        captureId: capture.id,
+                        comment: comment,
+                      ),
                     );
                   }).toList(),
                 );
@@ -501,60 +665,6 @@ class _CommentListSection extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = selected ? Colors.red : AppColors.textPrimary;
-    final disabledColor = AppColors.textSecondary;
-
-    return InkWell(
-      borderRadius: AppRadius.mdRadius,
-      onTap: enabled ? onTap : null,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
-        ),
-        decoration: BoxDecoration(
-          color: selected ? Colors.red.withOpacity(0.08) : AppColors.background,
-          borderRadius: AppRadius.mdRadius,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: enabled ? color : disabledColor,
-            ),
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              label,
-              style: AppTextStyles.caption.copyWith(
-                color: enabled ? color : disabledColor,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -723,10 +833,74 @@ class _EmptyComments extends StatelessWidget {
 
 class _CommentCard extends StatelessWidget {
   const _CommentCard({
+    required this.captureId,
     required this.comment,
   });
 
+  final String captureId;
   final PublicCaptureComment comment;
+
+  Future<void> _deleteComment(BuildContext context) async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null || user.uid != comment.userId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('삭제 권한이 없습니다.')),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('댓글 삭제'),
+          content: const Text('이 댓글을 삭제할까요?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('삭제'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    final publicCaptureRef =
+        FirebaseFirestore.instance.collection('publicCaptures').doc(captureId);
+
+    final commentRef = publicCaptureRef.collection('comments').doc(comment.id);
+
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+
+      batch.delete(commentRef);
+      batch.update(publicCaptureRef, {
+        'commentCount': FieldValue.increment(-1),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('댓글이 삭제되었어요.')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('댓글 삭제 중 오류가 발생했어요: $e')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -777,6 +951,18 @@ class _CommentCard extends StatelessWidget {
               ],
             ),
           ),
+          if (isMine) ...[
+            const SizedBox(width: AppSpacing.sm),
+            IconButton(
+              icon: const Icon(
+                Icons.delete_outline_rounded,
+                size: 20,
+              ),
+              color: AppColors.textSecondary,
+              tooltip: '댓글 삭제',
+              onPressed: () => _deleteComment(context),
+            ),
+          ],
         ],
       ),
     );
