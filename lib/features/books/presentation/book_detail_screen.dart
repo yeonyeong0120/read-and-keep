@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/services/tts_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -164,7 +167,7 @@ class BookDetailScreen extends ConsumerWidget {
 
   void _goToBookshelfEdit(BuildContext context) {
     Navigator.of(context).push(
-      MaterialPageRoute(
+      MaterialPageRoute<void>(
         builder: (_) => const BookshelfEditScreen(),
       ),
     );
@@ -268,71 +271,124 @@ class _DetailBody extends ConsumerStatefulWidget {
 }
 
 class _DetailBodyState extends ConsumerState<_DetailBody> {
+  final TtsService _ttsService = TtsService();
+
   _CaptureVisibilityFilter _visibilityFilter = _CaptureVisibilityFilter.all;
   _CaptureSortType _sortType = _CaptureSortType.newestFirst;
 
-  Future<void> _deleteCapture(
-  BuildContext context,
-  Capture capture,
-) async {
-  final accepted = await showDialog<bool>(
-    context: context,
-    barrierDismissible: false,
-    builder: (dialogContext) {
-      return AlertDialog(
-        title: const Text('저장한 구절을 삭제할까요?'),
-        content: const Text(
-          '이 구절과 이 구절에 달린 코멘트가 함께 삭제됩니다.\n\n'
-          '삭제 후에는 되돌릴 수 없어요.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop(false);
-            },
-            child: const Text('취소'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop(true);
-            },
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            child: const Text('삭제'),
-          ),
-        ],
-      );
-    },
-  );
+  String? _speakingCaptureId;
+  int _ttsRunId = 0;
 
-  if (accepted != true) return;
-  if (!context.mounted) return;
+  String _buildCaptureTtsText(Capture capture) {
+    final quote = capture.quote.trim();
+    final comment = capture.comment.trim();
 
-  try {
-    await ref.read(captureRepositoryProvider).deleteCapture(
-          bookId: capture.bookId,
-          captureId: capture.id,
-          hadComment: capture.comment.trim().isNotEmpty,
-        );
+    if (comment.isEmpty) {
+      return quote;
+    }
 
-    ref.invalidate(booksProvider());
-    ref.invalidate(bookProvider(capture.bookId));
-    ref.invalidate(bookCapturesProvider(bookId: capture.bookId));
-
-    if (!context.mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('구절을 삭제했어요.')),
-    );
-  } catch (e) {
-    if (!context.mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('구절 삭제 중 오류가 발생했어요: $e')),
-    );
+    return '$quote\n\n감상입니다. $comment';
   }
-}
+
+  Future<void> _toggleCaptureTts(Capture capture) async {
+    final isSameCapture = _speakingCaptureId == capture.id;
+
+    if (isSameCapture) {
+      _ttsRunId++;
+
+      await _ttsService.stop();
+
+      if (!mounted) return;
+
+      setState(() {
+        _speakingCaptureId = null;
+      });
+
+      return;
+    }
+
+    final currentRunId = ++_ttsRunId;
+
+    await _ttsService.stop();
+
+    if (!mounted) return;
+
+    setState(() {
+      _speakingCaptureId = capture.id;
+    });
+
+    await _ttsService.speak(_buildCaptureTtsText(capture));
+
+    if (!mounted) return;
+    if (_ttsRunId != currentRunId) return;
+
+    setState(() {
+      _speakingCaptureId = null;
+    });
+  }
+
+  Future<void> _deleteCapture(
+    BuildContext context,
+    Capture capture,
+  ) async {
+    final accepted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('저장한 구절을 삭제할까요?'),
+          content: const Text(
+            '이 구절과 이 구절에 달린 코멘트가 함께 삭제됩니다.\n\n'
+            '삭제 후에는 되돌릴 수 없어요.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true);
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+              child: const Text('삭제'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (accepted != true) return;
+    if (!context.mounted) return;
+
+    try {
+      await ref.read(captureRepositoryProvider).deleteCapture(
+            bookId: capture.bookId,
+            captureId: capture.id,
+            hadComment: capture.comment.trim().isNotEmpty,
+          );
+
+      ref.invalidate(booksProvider());
+      ref.invalidate(bookProvider(capture.bookId));
+      ref.invalidate(bookCapturesProvider(bookId: capture.bookId));
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('구절을 삭제했어요.')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('구절 삭제 중 오류가 발생했어요: $e')),
+      );
+    }
+  }
 
   Future<void> _deleteCaptureComments(
     DocumentReference<Map<String, dynamic>> captureRef,
@@ -383,6 +439,13 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     }
 
     return filtered;
+  }
+
+  @override
+  void dispose() {
+    _ttsRunId++;
+    unawaited(_ttsService.dispose());
+    super.dispose();
   }
 
   @override
@@ -505,6 +568,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     else
                       _CaptureList(
                         captures: visibleCaptures,
+                        speakingCaptureId: _speakingCaptureId,
+                        onToggleTts: _toggleCaptureTts,
                         onEdit: (capture) => _goToCaptureEdit(
                           context,
                           capture,
@@ -540,7 +605,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
 
   void _goToCaptureMethod(BuildContext context, Book book) {
     Navigator.of(context).push(
-      MaterialPageRoute(
+      MaterialPageRoute<void>(
         builder: (_) => CaptureMethodScreen(
           bookId: book.bookId,
           bookTitle: book.title,
@@ -554,7 +619,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
 
   void _goToCaptureEdit(BuildContext context, Capture capture) {
     Navigator.of(context).push(
-      MaterialPageRoute(
+      MaterialPageRoute<void>(
         builder: (_) => CaptureEditScreen(capture: capture),
       ),
     );
@@ -562,7 +627,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
 
   void _goToAddComment(BuildContext context, Capture capture) {
     Navigator.of(context).push(
-      MaterialPageRoute(
+      MaterialPageRoute<void>(
         builder: (_) => CaptureCommentAddScreen(capture: capture),
       ),
     );
@@ -574,7 +639,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     CaptureComment comment,
   ) {
     Navigator.of(context).push(
-      MaterialPageRoute(
+      MaterialPageRoute<void>(
         builder: (_) => CaptureCommentEditScreen(
           capture: capture,
           comment: comment,
@@ -799,6 +864,8 @@ class _InfoCountItem extends StatelessWidget {
 class _CaptureList extends StatelessWidget {
   const _CaptureList({
     required this.captures,
+    required this.speakingCaptureId,
+    required this.onToggleTts,
     required this.onEdit,
     required this.onDelete,
     required this.onAddComment,
@@ -806,6 +873,8 @@ class _CaptureList extends StatelessWidget {
   });
 
   final List<Capture> captures;
+  final String? speakingCaptureId;
+  final ValueChanged<Capture> onToggleTts;
   final ValueChanged<Capture> onEdit;
   final ValueChanged<Capture> onDelete;
   final ValueChanged<Capture> onAddComment;
@@ -820,6 +889,8 @@ class _CaptureList extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: AppSpacing.md),
               child: _CaptureCard(
                 capture: capture,
+                isSpeaking: speakingCaptureId == capture.id,
+                onToggleTts: () => onToggleTts(capture),
                 onEdit: () => onEdit(capture),
                 onDelete: () => onDelete(capture),
                 onAddComment: () => onAddComment(capture),
@@ -835,6 +906,8 @@ class _CaptureList extends StatelessWidget {
 class _CaptureCard extends StatefulWidget {
   const _CaptureCard({
     required this.capture,
+    required this.isSpeaking,
+    required this.onToggleTts,
     required this.onEdit,
     required this.onDelete,
     required this.onAddComment,
@@ -842,6 +915,8 @@ class _CaptureCard extends StatefulWidget {
   });
 
   final Capture capture;
+  final bool isSpeaking;
+  final VoidCallback onToggleTts;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onAddComment;
@@ -1064,10 +1139,33 @@ class _CaptureCardState extends State<_CaptureCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(
-                  Icons.format_quote_rounded,
-                  color: AppColors.primary,
-                  size: 26,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.format_quote_rounded,
+                      color: AppColors.primary,
+                      size: 26,
+                    ),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: widget.onToggleTts,
+                      icon: Icon(
+                        widget.isSpeaking
+                            ? Icons.stop_circle_outlined
+                            : Icons.volume_up_outlined,
+                        size: 18,
+                      ),
+                      label: Text(widget.isSpeaking ? '정지' : '듣기'),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: 4,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
@@ -1306,9 +1404,6 @@ class _CommentBox extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
-
-                    // 첫 코멘트는 구절 편집에서 관리하므로 개별 편집 메뉴 없음.
-                    // 새로 추가한 코멘트에만 수정/삭제 메뉴 표시.
                     if (!comment.isLegacy)
                       PopupMenuButton<_CommentMenuAction>(
                         icon: const Icon(Icons.more_horiz_rounded, size: 20),
@@ -1569,10 +1664,10 @@ class _DetailCover extends StatelessWidget {
               width: _width,
               height: _height,
               fit: BoxFit.cover,
-              placeholder: (context, _) {
+              placeholder: (context, url) {
                 return const _CoverPlaceholder(width: _width, height: _height);
               },
-              errorWidget: (context, _, _) {
+              errorWidget: (context, url, error) {
                 return const _CoverPlaceholder(width: _width, height: _height);
               },
             ),
