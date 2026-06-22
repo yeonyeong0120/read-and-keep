@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -174,12 +176,8 @@ class _PublicCaptureDetailScreenState extends State<PublicCaptureDetailScreen> {
   }
 
   void _openCommentWriteScreen() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => PublicCaptureCommentWriteScreen(
-          captureId: widget.capture.id,
-        ),
-      ),
+    context.push(
+      AppRoutes.publicCaptureCommentWriteOf(widget.capture.id),
     );
   }
 
@@ -195,7 +193,7 @@ class _PublicCaptureDetailScreenState extends State<PublicCaptureDetailScreen> {
         title: const Text('공개 구절'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.pop(),
         ),
       ),
       body: SafeArea(
@@ -308,7 +306,7 @@ class _PublicCaptureCommentWriteScreenState
 
       if (!mounted) return;
 
-      Navigator.of(context).pop();
+      context.pop();
     } catch (e) {
       if (!mounted) return;
 
@@ -338,7 +336,7 @@ class _PublicCaptureCommentWriteScreenState
         title: const Text('댓글 작성'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.pop(),
         ),
       ),
       body: SafeArea(

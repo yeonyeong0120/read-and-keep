@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
@@ -141,7 +142,7 @@ class _BookshelfEditScreenState extends ConsumerState<BookshelfEditScreen> {
       );
 
       if (mounted) {
-        Navigator.of(context).pop();
+        context.pop();
       }
     } catch (e) {
       if (!mounted) return;
@@ -193,7 +194,7 @@ class _BookshelfEditScreenState extends ConsumerState<BookshelfEditScreen> {
         title: const Text('책장 편집'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: _isDeleting ? null : () => Navigator.of(context).pop(),
+          onPressed: _isDeleting ? null : () => context.pop(),
         ),
       ),
       body: SafeArea(

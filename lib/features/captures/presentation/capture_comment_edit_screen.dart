@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
@@ -86,7 +87,7 @@ class _CaptureCommentEditScreenState extends State<CaptureCommentEditScreen> {
         const SnackBar(content: Text('코멘트를 수정했어요.')),
       );
 
-      Navigator.of(context).pop();
+      context.pop();
     } catch (e) {
       if (!mounted) return;
 
@@ -108,7 +109,7 @@ class _CaptureCommentEditScreenState extends State<CaptureCommentEditScreen> {
         title: const Text('코멘트 수정'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+          onPressed: _isSaving ? null : () => context.pop(),
         ),
       ),
       body: SafeArea(

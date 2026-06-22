@@ -12,8 +12,6 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../../books/data/models/book.dart';
 import '../../books/domain/book_providers.dart';
-import '../../books/presentation/book_detail_screen.dart';
-import '../../books/presentation/bookshelf_overview_screen.dart';
 import '../../books/presentation/widgets/book_cover.dart';
 import '../../books/presentation/widgets/book_relative_time.dart';
 
@@ -26,11 +24,7 @@ class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   void _goToBookshelfOverview(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const BookshelfOverviewScreen(),
-      ),
-    );
+    context.push(AppRoutes.bookshelf);
   }
 
   @override
@@ -55,6 +49,14 @@ class HomeScreen extends ConsumerWidget {
               const SizedBox(height: AppSpacing.md),
               const _BookshelfSection(),
 
+              // 주 CTA(문장 추가)를 책장 바로 아래로 배치한다.
+              const SizedBox(height: AppSpacing.xl),
+              const _AddCaptureHint(),
+              const SizedBox(height: AppSpacing.md),
+              _AddCaptureButton(
+                onPressed: () => context.go(AppRoutes.bookSelect),
+              ),
+
               const SizedBox(height: AppSpacing.xl),
               const _SectionHeader('최근 저장한 문장'),
               const SizedBox(height: AppSpacing.md),
@@ -64,14 +66,6 @@ class HomeScreen extends ConsumerWidget {
               const _SectionHeader('오늘의 문장'),
               const SizedBox(height: AppSpacing.md),
               const _TodayQuoteCard(),
-
-              const SizedBox(height: AppSpacing.xl),
-              const _AddCaptureHint(),
-              const SizedBox(height: AppSpacing.md),
-
-              _AddCaptureButton(
-                onPressed: () => context.go(AppRoutes.bookSelect),
-              ),
 
               const SizedBox(height: AppSpacing.xl),
             ],
@@ -167,7 +161,7 @@ class _BookshelfSection extends ConsumerWidget {
     final booksAsync = ref.watch(booksProvider());
 
     return booksAsync.when(
-      loading: () => const SizedBox(height: 220),
+      loading: () => const SizedBox(height: 224),
       error: (_, _) => const _BookshelfEmptyCard(),
       data: (books) {
         if (books.isEmpty) return const _BookshelfEmptyCard();
@@ -189,7 +183,7 @@ class _BookshelfHorizontalList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 220,
+      height: 224,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.zero,
@@ -222,7 +216,7 @@ class _HomeBookCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final recordTime = book.lastCapturedAt ?? book.lastSelectedAt;
+    final recordTime = book.lastRecordAt;
 
     return GestureDetector(
       onTap: onTap,
@@ -467,11 +461,7 @@ class _RecentCaptureCard extends StatelessWidget {
   final _RecentCaptureSummary summary;
 
   void _goToBookDetail(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => BookDetailScreen(bookId: summary.bookId),
-      ),
-    );
+    context.push(AppRoutes.bookDetailOf(summary.bookId));
   }
 
   @override
