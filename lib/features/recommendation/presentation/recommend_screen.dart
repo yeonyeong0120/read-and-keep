@@ -1,55 +1,52 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-import '../../../core/ai/ai_config.dart';
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../data/keyword_icons.dart';
 import '../data/models/recommendation_cache.dart';
+import '../domain/drift_status.dart';
 import '../domain/recommendation_providers.dart';
 
-/// 추천(RC) 화면.
+/// 추천(RC-001) 메인 화면.
 ///
-/// 화면 레이아웃/카드는 기존 그대로 두고, 추천 데이터 소스만 교체했다.
-/// - 생성 트리거: [recommendationGeneratorProvider] 의 generate()
-///   (1차 분석 → 후보 수집 → 2차 랭킹 → 캐시 저장).
-/// - 결과 표시: [recommendationCacheProvider](RecommendationCache?) 를 구독해
-///   화면 카드용 [_RecommendedBook] 으로 변환(어댑터)해서 그린다.
-/// 로딩/에러는 Provider 의 AsyncValue 로만 다루고(수동 플래그 없음), 표시 문구
-/// 구분용 화면 상태만 [_generatedThisSession] 으로 둔다.
-class RecommendScreen extends ConsumerStatefulWidget {
+/// 본문은 [driftStatusProvider] 의 4상태로 분기한다.
+/// - belowThreshold : 콜드스타트(책/구절 부족). LLM 호출 없음, 문장 추가 유도.
+/// - noCache        : 조건 충족 + 캐시 없음. "추천 받기" 로 첫 생성.
+/// - fresh          : 캐시 최신. 결과 표시 + 수동 재생성.
+/// - stale          : 캐시 있으나 구절 변동. 결과 + 상단 갱신 배너.
+///
+/// 생성 진행/에러는 [recommendationGeneratorProvider] 의 AsyncValue 를 우선
+/// 표시한다(수동 플래그 없음). 진입만으로는 generate 가 호출되지 않으며, 생성은
+/// 버튼/배너 탭에서만 시작한다. 결과 데이터는 [recommendationCacheProvider].
+class RecommendScreen extends ConsumerWidget {
   const RecommendScreen({super.key});
 
   @override
-  ConsumerState<RecommendScreen> createState() => _RecommendScreenState();
-}
-
-class _RecommendScreenState extends ConsumerState<RecommendScreen> {
-  /// 이번 세션에서 생성 버튼을 직접 눌렀는지(결과 문구의 "이전/새로" 구분용).
-  /// 비동기 로딩/에러 상태와 무관한 표시 전용 화면 상태다.
-  bool _generatedThisSession = false;
-
-  Future<void> _generate() async {
-    await ref.read(recommendationGeneratorProvider.notifier).generate();
-    if (!mounted) return;
-    setState(() => _generatedThisSession = true);
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final generationState = ref.watch(recommendationGeneratorProvider);
-    final cacheState = ref.watch(recommendationCacheProvider);
+    final driftState = ref.watch(driftStatusProvider);
 
-    final isLoading = generationState.isLoading;
-    final cache = cacheState.asData?.value;
-    final hasResult = cache != null &&
-        (cache.todaysPick != null || cache.alsoRecommended.isNotEmpty);
+    // 생성 트리거. 진입이 아닌 버튼/배너에서만 호출된다.
+    void generate() {
+      ref.read(recommendationGeneratorProvider.notifier).generate();
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('추천'),
+        actions: [
+          IconButton(
+            tooltip: '추천 기준',
+            icon: const Icon(Icons.info_outline_rounded),
+            onPressed: () => context.push(AppRoutes.recommendCriteria),
+          ),
+        ],
       ),
       body: SafeArea(
         child: ListView(
@@ -60,104 +57,55 @@ class _RecommendScreenState extends ConsumerState<RecommendScreen> {
           children: [
             const _RecommendHeader(),
             const SizedBox(height: AppSpacing.lg),
-            _RecommendActionCard(
-              isLoading: isLoading,
-              captureCount: cache?.snapshotCaptureCount ?? 0,
-              isCachedResult: hasResult && !_generatedThisSession,
-              usedGeminiResult: !AiConfig.useMockRecommendation,
-              onGenerate: _generate,
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            _buildBody(
-              generationState: generationState,
-              cacheState: cacheState,
-            ),
+            _buildContent(generationState, driftState, generate),
           ],
         ),
       ),
     );
   }
 
-  /// 생성 상태(우선) → 캐시 상태 순으로 본문을 그린다.
-  ///
-  /// 생성 중/실패는 generator 의 AsyncValue 로, 결과 유무는 cache 의 AsyncValue
-  /// 로 판정한다. cache 가 null 이면 아직 생성 전, 결과가 비면 부족 안내를 띄운다.
-  Widget _buildBody({
-    required AsyncValue<void> generationState,
-    required AsyncValue<RecommendationCache?> cacheState,
-  }) {
-    // 1) 생성 중 → 로딩.
+  /// 생성 상태(우선) → DriftStatus 순으로 본문을 그린다.
+  Widget _buildContent(
+    AsyncValue<void> generationState,
+    AsyncValue<DriftStatus> driftState,
+    VoidCallback onGenerate,
+  ) {
+    // 1) 생성 진행 중 → 로딩(다른 상태보다 우선).
     if (generationState.isLoading) {
       return const _RecommendLoadingView();
     }
 
-    // 2) 생성 실패 → 에러.
+    // 2) 생성 실패 → 에러 + 다시 시도.
     if (generationState.hasError) {
       return _RecommendErrorView(
         message: generationState.error.toString(),
+        onRetry: onGenerate,
       );
     }
 
-    // 3) 캐시 스트림 상태로 결과를 그린다.
-    return cacheState.when(
-      loading: () => const _RecommendLoadingView(),
+    // 3) DriftStatus 4상태 분기.
+    return driftState.when(
+      loading: () => const _DriftLoadingView(),
       error: (error, _) => _RecommendErrorView(message: error.toString()),
-      data: (cache) {
-        if (cache == null) {
-          return const _RecommendReadyView();
+      data: (status) {
+        switch (status) {
+          case DriftStatus.belowThreshold:
+            return const _ColdStartView();
+          case DriftStatus.noCache:
+            return _NoCacheView(onGenerate: onGenerate);
+          case DriftStatus.fresh:
+            return _ResultView(isStale: false, onGenerate: onGenerate);
+          case DriftStatus.stale:
+            return _ResultView(isStale: true, onGenerate: onGenerate);
         }
-
-        final books = _adaptCacheToBooks(cache);
-        if (books.isEmpty) {
-          return _RecommendInsufficientView(
-            captureCount: cache.snapshotCaptureCount,
-          );
-        }
-
-        return _RecommendResultList(
-          books: books,
-          isCachedResult: !_generatedThisSession,
-          usedGeminiResult: !AiConfig.useMockRecommendation,
-        );
       },
     );
   }
-
-  /// 추천 캐시(todaysPick + alsoRecommended)를 화면 카드용 목록으로 변환한다.
-  /// 오늘의 추천을 맨 앞(대표 추천)에 두고, 함께 추천을 뒤에 잇는다.
-  List<_RecommendedBook> _adaptCacheToBooks(RecommendationCache cache) {
-    final books = <_RecommendedBook>[];
-
-    final pick = cache.todaysPick;
-    if (pick != null) {
-      books.add(_fromRecommendedBook(pick));
-    }
-    for (final book in cache.alsoRecommended) {
-      books.add(_fromRecommendedBook(book));
-    }
-
-    return books;
-  }
-
-  /// 내 [RecommendedBook] → 화면 [_RecommendedBook] 매핑.
-  ///
-  /// 표지는 엔진이 카카오 후보에서 채운 coverUrl 을 그대로 쓴다(화면의 추가
-  /// 카카오 보정 없음). 칩 키워드는 연관 키워드 우선, 없으면 테마 매칭을 쓴다.
-  _RecommendedBook _fromRecommendedBook(RecommendedBook book) {
-    final keyword = book.relatedKeywords.isNotEmpty
-        ? book.relatedKeywords.first
-        : (book.themeMatch.trim().isEmpty ? '개인화 추천' : book.themeMatch);
-
-    return _RecommendedBook(
-      title: book.title,
-      author: book.author,
-      publisher: '',
-      thumbnail: book.coverUrl,
-      keyword: keyword,
-      reason: book.reason,
-    );
-  }
 }
+
+// =============================================================================
+// 공통 헤더
+// =============================================================================
 
 class _RecommendHeader extends StatelessWidget {
   const _RecommendHeader();
@@ -201,28 +149,243 @@ class _RecommendHeader extends StatelessWidget {
   }
 }
 
-class _RecommendActionCard extends StatelessWidget {
-  const _RecommendActionCard({
-    required this.isLoading,
-    required this.captureCount,
-    required this.isCachedResult,
-    required this.usedGeminiResult,
-    required this.onGenerate,
-  });
+// =============================================================================
+// 1) belowThreshold — 콜드스타트
+// =============================================================================
 
-  final bool isLoading;
-  final int captureCount;
-  final bool isCachedResult;
-  final bool usedGeminiResult;
+class _ColdStartView extends StatelessWidget {
+  const _ColdStartView();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.lgRadius,
+        border: Border.all(color: AppColors.outline),
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.menu_book_outlined,
+            size: 44,
+            color: AppColors.textSecondary,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const Text(
+            '아직 추천을 받을 만큼 문장이 모이지 않았어요',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodyStrong,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          const Text(
+            '구절을 3개 이상 모으면 맞춤 추천이 시작됩니다.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.caption,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => context.go(AppRoutes.bookSelect),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('문장 추가하러 가기'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// 2) noCache — 조건 충족 + 캐시 없음
+// =============================================================================
+
+class _NoCacheView extends StatelessWidget {
+  const _NoCacheView({required this.onGenerate});
+
   final VoidCallback onGenerate;
 
   @override
   Widget build(BuildContext context) {
-    final countText = captureCount == 0 ? '아직 확인 전' : '$captureCount개 확인됨';
-    final cacheText = isCachedResult ? '\n이전 추천 결과를 불러왔어요.' : '';
-    final aiText =
-        usedGeminiResult ? '\nGemini 분석 결과를 사용했어요.' : '\n기본 추천 로직을 사용했어요.';
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.lgRadius,
+        border: Border.all(color: AppColors.outline),
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.auto_awesome_rounded,
+            size: 44,
+            color: AppColors.primary,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const Text(
+            '맞춤 추천을 받아보세요',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodyStrong,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          const Text(
+            '저장한 구절을 분석해 취향에 맞는 책을 찾아드릴게요.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.caption,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onGenerate,
+              icon: const Icon(Icons.auto_awesome_rounded),
+              label: const Text('추천 받기'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
+// =============================================================================
+// 3·4) fresh / stale — 결과 렌더(공통). stale 이면 상단 갱신 배너.
+// =============================================================================
+
+class _ResultView extends ConsumerWidget {
+  const _ResultView({
+    required this.isStale,
+    required this.onGenerate,
+  });
+
+  /// 캐시 생성 이후 구절 수가 변동됐는지(갱신 배너 노출 여부).
+  final bool isStale;
+  final VoidCallback onGenerate;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cacheState = ref.watch(recommendationCacheProvider);
+
+    return cacheState.when(
+      loading: () => const _DriftLoadingView(),
+      error: (error, _) => _RecommendErrorView(message: error.toString()),
+      data: (cache) {
+        // fresh/stale 는 캐시 존재를 전제하지만, 경쟁 상태 방어로 null 처리.
+        if (cache == null) {
+          return _NoCacheView(onGenerate: onGenerate);
+        }
+
+        final pick = cache.todaysPick;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isStale) ...[
+              _RefreshBanner(onRefresh: onGenerate),
+              const SizedBox(height: AppSpacing.xl),
+            ],
+            _AnalysisSummaryCard(
+              summary: cache.summary,
+              keywords: cache.keywords,
+            ),
+            if (pick != null) ...[
+              const SizedBox(height: AppSpacing.xl),
+              const _SectionTitle('오늘의 추천'),
+              const SizedBox(height: AppSpacing.md),
+              _RecommendedBookCard(
+                book: _toCardBook(pick),
+                onTap: () =>
+                    context.push(AppRoutes.recommendDetail, extra: pick),
+              ),
+            ],
+            if (cache.alsoRecommended.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.xl),
+              const _SectionTitle('함께 보면 좋은 책'),
+              const SizedBox(height: AppSpacing.md),
+              ...cache.alsoRecommended.map(
+                (book) => Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                  child: _RecommendedBookCard(
+                    book: _toCardBook(book),
+                    onTap: () =>
+                        context.push(AppRoutes.recommendDetail, extra: book),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.lg),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: onGenerate,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('추천 다시 생성하기'),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// 갱신 배너(stale). surfaceVariant 톤으로 눈에 띄되 과하지 않게.
+class _RefreshBanner extends StatelessWidget {
+  const _RefreshBanner({required this.onRefresh});
+
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: AppRadius.lgRadius,
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.autorenew_rounded,
+            color: AppColors.primary,
+            size: 24,
+          ),
+          const SizedBox(width: AppSpacing.md),
+          const Expanded(
+            child: Text(
+              '새로 저장한 문장이 있어요. 추천을 갱신해보세요.',
+              style: AppTextStyles.bodyStrong,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          FilledButton(
+            onPressed: onRefresh,
+            child: const Text('갱신하기'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 분석 요약 카드 — 통합 때 제거된 요약 카드를 1차 분석 결과로 대체한다.
+///
+/// summary(한 줄 요약)와 keywords(label+icon)를 칩으로 보여준다. 아이콘은
+/// [keywordIconData] 로 매핑한다.
+class _AnalysisSummaryCard extends StatelessWidget {
+  const _AnalysisSummaryCard({
+    required this.summary,
+    required this.keywords,
+  });
+
+  final String summary;
+  final List<RecommendationKeyword> keywords;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
@@ -234,27 +397,63 @@ class _RecommendActionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '추천 생성',
+            '당신의 독서 취향',
             style: AppTextStyles.bodyStrong,
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            '저장한 구절을 분석해 추천 후보를 만들고, 카카오 책 검색 결과와 연결합니다.\n저장 구절: $countText$cacheText$aiText',
-            style: AppTextStyles.caption,
+          if (summary.trim().isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              summary,
+              style: AppTextStyles.body,
+            ),
+          ],
+          if (keywords.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: keywords
+                  .map((keyword) => _KeywordChip(keyword: keyword))
+                  .toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// 키워드 칩(아이콘 + 라벨). 알약형 surfaceVariant 배경.
+class _KeywordChip extends StatelessWidget {
+  const _KeywordChip({required this.keyword});
+
+  final RecommendationKeyword keyword;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: AppRadius.fullRadius,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            keywordIconData(keyword.icon),
+            size: 14,
+            color: AppColors.primary,
           ),
-          const SizedBox(height: AppSpacing.lg),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: isLoading ? null : onGenerate,
-              icon: isLoading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.auto_awesome_rounded),
-              label: Text(isLoading ? '추천 생성 중...' : '추천 다시 생성하기'),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            keyword.label,
+            style: AppTextStyles.caption.copyWith(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -263,42 +462,25 @@ class _RecommendActionCard extends StatelessWidget {
   }
 }
 
-class _RecommendReadyView extends StatelessWidget {
-  const _RecommendReadyView();
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
+
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.lgRadius,
-        border: Border.all(color: AppColors.outline),
-      ),
-      child: const Column(
-        children: [
-          Icon(
-            Icons.menu_book_outlined,
-            size: 44,
-            color: AppColors.textSecondary,
-          ),
-          SizedBox(height: AppSpacing.md),
-          Text(
-            '아직 추천을 생성하지 않았어요',
-            style: AppTextStyles.bodyStrong,
-          ),
-          SizedBox(height: AppSpacing.xs),
-          Text(
-            '저장한 구절이 3개 이상이면 추천 결과를 확인할 수 있어요.',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.caption,
-          ),
-        ],
-      ),
+    return Text(
+      text,
+      style: AppTextStyles.title,
     );
   }
 }
 
+// =============================================================================
+// 로딩 / 에러 (팀원 위젯 재사용 + 보강)
+// =============================================================================
+
+/// generate 진행 중 로딩 뷰.
 class _RecommendLoadingView extends StatelessWidget {
   const _RecommendLoadingView();
 
@@ -316,7 +498,7 @@ class _RecommendLoadingView extends StatelessWidget {
           CircularProgressIndicator(),
           SizedBox(height: AppSpacing.md),
           Text(
-            '추천 도서를 확인하는 중이에요',
+            '추천을 분석하고 있어요',
             style: AppTextStyles.bodyStrong,
           ),
           SizedBox(height: AppSpacing.xs),
@@ -331,42 +513,15 @@ class _RecommendLoadingView extends StatelessWidget {
   }
 }
 
-class _RecommendInsufficientView extends StatelessWidget {
-  const _RecommendInsufficientView({
-    required this.captureCount,
-  });
-
-  final int captureCount;
+/// driftStatus 로딩용 간단 인디케이터.
+class _DriftLoadingView extends StatelessWidget {
+  const _DriftLoadingView();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.lgRadius,
-        border: Border.all(color: AppColors.outline),
-      ),
-      child: Column(
-        children: [
-          const Icon(
-            Icons.info_outline_rounded,
-            size: 44,
-            color: AppColors.textSecondary,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          const Text(
-            '추천을 위한 구절이 부족해요',
-            style: AppTextStyles.bodyStrong,
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            '현재 저장된 구절은 $captureCount개예요.\n최소 3개 이상 저장하면 추천을 생성할 수 있어요.',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.caption,
-          ),
-        ],
-      ),
+    return const Padding(
+      padding: EdgeInsets.all(AppSpacing.xxl),
+      child: Center(child: CircularProgressIndicator()),
     );
   }
 }
@@ -374,9 +529,13 @@ class _RecommendInsufficientView extends StatelessWidget {
 class _RecommendErrorView extends StatelessWidget {
   const _RecommendErrorView({
     required this.message,
+    this.onRetry,
   });
 
   final String message;
+
+  /// 있으면 "다시 시도" 버튼을 노출한다(생성 에러용).
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -405,58 +564,37 @@ class _RecommendErrorView extends StatelessWidget {
             textAlign: TextAlign.center,
             style: AppTextStyles.caption,
           ),
+          if (onRetry != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('다시 시도'),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _RecommendResultList extends StatelessWidget {
-  const _RecommendResultList({
-    required this.books,
-    required this.isCachedResult,
-    required this.usedGeminiResult,
-  });
-
-  final List<_RecommendedBook> books;
-  final bool isCachedResult;
-  final bool usedGeminiResult;
-
-  @override
-  Widget build(BuildContext context) {
-    final sourceText = usedGeminiResult ? 'Gemini 분석 기반' : '기본 추천 로직 기반';
-    final cacheText = isCachedResult ? '이전에 생성한 추천 결과' : '새로 생성한 추천 결과';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '추천 결과',
-          style: AppTextStyles.title,
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          '$cacheText · $sourceText',
-          style: AppTextStyles.caption,
-        ),
-        const SizedBox(height: AppSpacing.md),
-        ...books.map(
-          (book) => Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: _RecommendedBookCard(book: book),
-          ),
-        ),
-      ],
-    );
-  }
-}
+// =============================================================================
+// 추천 책 카드 (팀원 위젯 재사용)
+// =============================================================================
 
 class _RecommendedBookCard extends StatelessWidget {
   const _RecommendedBookCard({
     required this.book,
+    this.onTap,
   });
 
   final _RecommendedBook book;
+
+  /// 카드 탭 시 RC-003 추천 상세로 이동.
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -465,69 +603,73 @@ class _RecommendedBookCard extends StatelessWidget {
       '카카오 책 검색 확인',
     ].join(' · ');
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.lgRadius,
-        border: Border.all(color: AppColors.outline),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _RecommendBookCover(url: book.thumbnail),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  book.title,
-                  style: AppTextStyles.bodyStrong,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  book.author,
-                  style: AppTextStyles.caption,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  meta,
-                  style: AppTextStyles.caption,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                    vertical: 4,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.lgRadius,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: AppRadius.lgRadius,
+          border: Border.all(color: AppColors.outline),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _RecommendBookCover(url: book.thumbnail),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    book.title,
+                    style: AppTextStyles.bodyStrong,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(999),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    book.author,
+                    style: AppTextStyles.caption,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  child: Text(
-                    book.keyword,
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w700,
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    meta,
+                    style: AppTextStyles.caption,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(AppRadius.full),
+                    ),
+                    child: Text(
+                      book.keyword,
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  book.reason,
-                  style: AppTextStyles.caption.copyWith(height: 1.4),
-                ),
-              ],
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    book.reason,
+                    style: AppTextStyles.caption.copyWith(height: 1.4),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -569,7 +711,7 @@ class _EmptyBookCover extends StatelessWidget {
     return Container(
       width: 58,
       height: 82,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: AppColors.surfaceVariant,
         borderRadius: AppRadius.mdRadius,
       ),
@@ -581,10 +723,30 @@ class _EmptyBookCover extends StatelessWidget {
   }
 }
 
-/// 화면 카드 표시 전용 추천 도서 뷰 모델.
+// =============================================================================
+// 화면 카드 표시 전용 뷰 모델 + 어댑터
+// =============================================================================
+
+/// 추천 엔진의 [RecommendedBook] 을 화면 카드용 [_RecommendedBook] 으로 변환한다.
 ///
-/// 추천 엔진의 [RecommendedBook] 을 화면이 기대하는 필드 형태로 변환한 값이다
-/// (어댑터 결과). 직렬화/Firestore 접근은 하지 않는다.
+/// 표지는 엔진이 카카오 후보에서 채운 coverUrl 을 그대로 쓴다(화면 추가 보정 없음).
+/// 칩 키워드는 연관 키워드 우선, 없으면 테마 매칭을 쓴다.
+_RecommendedBook _toCardBook(RecommendedBook book) {
+  final keyword = book.relatedKeywords.isNotEmpty
+      ? book.relatedKeywords.first
+      : (book.themeMatch.trim().isEmpty ? '개인화 추천' : book.themeMatch);
+
+  return _RecommendedBook(
+    title: book.title,
+    author: book.author,
+    publisher: '',
+    thumbnail: book.coverUrl,
+    keyword: keyword,
+    reason: book.reason,
+  );
+}
+
+/// 화면 카드 표시 전용 추천 도서 뷰 모델.
 class _RecommendedBook {
   const _RecommendedBook({
     required this.title,

@@ -20,8 +20,9 @@ class EnvConfig {
   static String get kakaoRestApiKey => _read('KAKAO_REST_API_KEY');
 
   // === Gemini ===
-  // AI Studio API Key 직접 호출용.
-  static String get geminiApiKey => _read('GEMINI_API_KEY');
+  // (옵션 B 통합 후 미사용) AI Studio API Key 직접 호출용 getter 는 제거됨.
+  // 현재 Gemini 호출은 보조 FirebaseApp(aiApp) + firebase_ai 로만 이뤄지며
+  // .env 의 GEMINI_API_KEY 는 필요하지 않다.
 
   // === 알라딘 ===
   // 베스트셀러 Open API 호출용.
