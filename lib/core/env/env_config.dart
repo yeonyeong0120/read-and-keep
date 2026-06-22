@@ -10,7 +10,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class EnvConfig {
   EnvConfig._();
 
-  static String _read(String key) => dotenv.env[key] ?? '';
+  static String _read(String key) => dotenv.env[key]?.trim() ?? '';
 
   // === 카카오 ===
   // 로그인 SDK 초기화용. 인증 기능 구현 단계에서 실제 사용한다.
@@ -18,6 +18,10 @@ class EnvConfig {
 
   // 책 검색 REST API 호출용.
   static String get kakaoRestApiKey => _read('KAKAO_REST_API_KEY');
+
+  // === Gemini ===
+  // AI Studio API Key 직접 호출용.
+  static String get geminiApiKey => _read('GEMINI_API_KEY');
 
   // === 알라딘 ===
   // 베스트셀러 Open API 호출용.
