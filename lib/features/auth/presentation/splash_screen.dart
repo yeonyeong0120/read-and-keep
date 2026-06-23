@@ -7,8 +7,8 @@ import '../../../core/theme/app_text_styles.dart';
 /// CM-001 스플래시 화면.
 ///
 /// 앱 시작 시 인증 상태([currentAppUserProvider])가 확정되기 전까지 머무는 화면이다.
-/// 로그인 화면과 동일한 배경(베이지 오버레이 + auth_background)을 사용해
-/// "스플래시 → 홈/로그인" 전환이 깜빡임 없이 자연스럽게 이어지도록 한다.
+/// auth_background 이미지를 배경으로 사용하며, 배경을 선명하게 보여주기 위해
+/// 베이지 오버레이는 두지 않는다. 중앙부가 밝은 톤이라 어두운 텍스트/로고가 잘 읽힌다.
 ///
 /// 실제 분기(홈/로그인)는 라우터 redirect 가 담당하므로 본 화면은 표시만 한다.
 class SplashScreen extends StatelessWidget {
@@ -19,17 +19,11 @@ class SplashScreen extends StatelessWidget {
     return Scaffold(
       body: Stack(
         children: [
-          // 최하단: 로그인 화면과 동일한 배경 이미지.
+          // 최하단: 배경 이미지(오버레이 없이 선명하게 노출).
           Positioned.fill(
             child: Image.asset(
               'assets/images/auth_background.png',
               fit: BoxFit.cover,
-            ),
-          ),
-          // 가독성 오버레이: 베이지 배경색을 반투명으로 한 겹 덮는다.
-          Positioned.fill(
-            child: ColoredBox(
-              color: AppColors.background.withValues(alpha: 0.82),
             ),
           ),
           // 브랜드 영역: 펼친 책 아이콘 + 서비스명 + 서브카피를 중앙 배치.

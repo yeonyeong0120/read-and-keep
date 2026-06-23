@@ -101,6 +101,9 @@ dev_dependencies:
   # === 코드 생성 (Hive 어댑터) ===
   hive_ce_generator: ^1.11.0
 
+  # === 네이티브 런치 스크린 생성 ===
+  flutter_native_splash: ^2.4.8
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
@@ -124,3 +127,16 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# === 네이티브 런치 스크린(flutter_native_splash) 설정 ===
+# 엔진 로딩 동안 뜨는 안드로이드 기본 흰 화면 + 플러터 로고를 우리 스플래시 톤(베이지)으로 교체한다.
+# color 는 AppColors.background(#FAF6F0)와 동일하게 맞춰 "네이티브 런치 → CM-001 스플래시 → 홈"이
+# 색 끊김 없이 이어지게 한다.
+# 중앙 로고는 별도 PNG 가 아직 없어(현재 스플래시는 Material 아이콘 사용) 이번엔 color 만 적용한다.
+# 아이콘 PNG 작업 시 image / android_12.image 에 경로를 채운다. iOS 는 프로젝트 제외 대상.
+flutter_native_splash:
+  color: "#FAF6F0"
+  android_12:
+    color: "#FAF6F0"
+  android: true
+  ios: false
