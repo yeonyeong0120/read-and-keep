@@ -7,6 +7,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../books/presentation/widgets/book_cover.dart';
+import '../data/models/bestseller_book.dart';
 import '../data/models/public_capture.dart';
 import '../domain/bestseller_providers.dart';
 import 'public_capture_detail_screen.dart';
@@ -18,14 +20,14 @@ enum TrendSortType {
   views,
 }
 
-class TrendScreen extends StatefulWidget {
+class TrendScreen extends ConsumerStatefulWidget {
   const TrendScreen({super.key});
 
   @override
-  State<TrendScreen> createState() => _TrendScreenState();
+  ConsumerState<TrendScreen> createState() => _TrendScreenState();
 }
 
-class _TrendScreenState extends State<TrendScreen> {
+class _TrendScreenState extends ConsumerState<TrendScreen> {
   TrendSortType _selectedSortType = TrendSortType.latest;
 
   Stream<List<PublicCapture>> _publicCapturesStream() {
@@ -97,6 +99,8 @@ class _TrendScreenState extends State<TrendScreen> {
   }
 
   Future<void> _refresh() async {
+    // 공개 구절 피드(StreamBuilder 재구독)와 함께 베스트셀러도 다시 불러온다.
+    ref.invalidate(bestsellersProvider);
     setState(() {});
     await Future<void>.delayed(const Duration(milliseconds: 250));
   }
@@ -107,8 +111,6 @@ class _TrendScreenState extends State<TrendScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('트렌드'),
-        // TODO: TR-B 에서 제거. 알라딘 베스트셀러 호출 확인용 임시 버튼.
-        actions: const [_BestsellerTestButton()],
       ),
       body: StreamBuilder<List<PublicCapture>>(
         stream: _publicCapturesStream(),
@@ -132,6 +134,8 @@ class _TrendScreenState extends State<TrendScreen> {
                   bottom: AppSpacing.xxl,
                 ),
                 children: [
+                  const _BestsellerSection(),
+                  const SizedBox(height: AppSpacing.xl),
                   const _TrendHeader(),
                   const SizedBox(height: AppSpacing.md),
                   _TrendSortChips(
@@ -153,6 +157,8 @@ class _TrendScreenState extends State<TrendScreen> {
                 bottom: AppSpacing.xxl,
               ),
               children: [
+                const _BestsellerSection(),
+                const SizedBox(height: AppSpacing.xl),
                 const _TrendHeader(),
                 const SizedBox(height: AppSpacing.md),
                 _TrendSortChips(
@@ -192,32 +198,38 @@ class _TrendHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      // 안내 카드가 세로로 길지 않도록 상하 패딩을 줄인다.
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
       decoration: const BoxDecoration(
         color: AppColors.surfaceVariant,
         borderRadius: AppRadius.lgRadius,
       ),
       child: const Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
             Icons.auto_graph_rounded,
             color: AppColors.primary,
-            size: 30,
+            size: 22,
           ),
-          SizedBox(width: AppSpacing.md),
+          SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   '공개 구절 피드',
-                  style: AppTextStyles.title,
+                  style: AppTextStyles.bodyStrong,
                 ),
                 SizedBox(height: AppSpacing.xs),
+                // 설명은 한 줄로 간결화한다(길면 말줄임).
                 Text(
-                  '다른 독자들이 공개한 구절을 최신순, 공감순, 댓글순, 조회순으로 확인해보세요.',
+                  '다른 독자들이 공개한 구절을 둘러보세요.',
                   style: AppTextStyles.caption,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -713,57 +725,230 @@ class _TrendErrorView extends StatelessWidget {
   }
 }
 
-/// TODO: TR-B 에서 제거.
+/// 트렌드 메인 상단의 알라딘 베스트셀러 섹션(TR-001, a방식 상단부).
 ///
-/// 알라딘 베스트셀러 호출이 실기기에서 되는지 확인하기 위한 임시 버튼이다.
-/// 누르면 [bestsellersProvider] 를 읽어 상위 3권의 순위/제목을 스낵바와
-/// 디버그 로그로 보여준다. 팀원의 공개 구절 피드 본체는 건드리지 않는다.
-class _BestsellerTestButton extends ConsumerWidget {
-  const _BestsellerTestButton();
+/// [bestsellersProvider] 를 watch 해 주간 TOP 5 를 세로 리스트로 보여준다.
+/// 공개 구절 피드(아래)와 시각적으로 구분되도록 카드로 감싼다.
+class _BestsellerSection extends ConsumerWidget {
+  const _BestsellerSection();
 
-  Future<void> _runTest(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      const SnackBar(content: Text('베스트셀러 불러오는 중...')),
-    );
-
-    try {
-      final books = await ref.read(bestsellersProvider().future);
-
-      // 디버그 콘솔에 전체 목록을 남긴다.
-      for (final book in books) {
-        debugPrint('[베스트셀러] ${book.rank}위 · ${book.title} · ${book.author}');
-      }
-
-      final preview = books
-          .take(3)
-          .map((book) => '${book.rank}위 ${book.title}')
-          .join('\n');
-
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              books.isEmpty ? '베스트셀러 결과가 비어 있어요' : '총 ${books.length}권\n$preview',
-            ),
-          ),
-        );
-    } catch (error) {
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(content: Text('베스트셀러 호출 실패: $error')),
-        );
-    }
-  }
+  /// PNG 기준 상위 5권만 노출한다.
+  static const int _topCount = 5;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return IconButton(
-      icon: const Icon(Icons.science_outlined),
-      tooltip: '베스트셀러 불러오기 테스트',
-      onPressed: () => _runTest(context, ref),
+    final bestsellersAsync = ref.watch(
+      bestsellersProvider(maxResults: _topCount),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text('주간 베스트셀러 TOP 5', style: AppTextStyles.title),
+            ),
+            // 전체보기(TR-002 기간별 베스트셀러). 라우팅은 TR-C 에서 연결한다.
+            InkWell(
+              borderRadius: AppRadius.smRadius,
+              onTap: () {
+                // TODO: TR-002 기간별 베스트셀러 라우팅 연결.
+              },
+              child: const Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xs,
+                  vertical: AppSpacing.xs,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('이번 주', style: AppTextStyles.caption),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: AppColors.textSecondary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        bestsellersAsync.when(
+          data: (books) {
+            if (books.isEmpty) {
+              return const _BestsellerMessageBox(
+                message: '아직 베스트셀러가 없어요',
+              );
+            }
+            final top = books.take(_topCount).toList();
+            return _BestsellerListCard(books: top);
+          },
+          loading: () => const _BestsellerLoadingBox(),
+          error: (error, _) => _BestsellerMessageBox(
+            message: '베스트셀러를 불러오지 못했어요',
+            // 다시 시도 시 provider 를 무효화해 재요청한다.
+            onRetry: () =>
+                ref.invalidate(bestsellersProvider(maxResults: _topCount)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 베스트셀러 TOP 5 를 담는 카드. 각 행 사이에 구분선을 둔다.
+class _BestsellerListCard extends StatelessWidget {
+  const _BestsellerListCard({required this.books});
+
+  final List<BestsellerBook> books;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    for (var i = 0; i < books.length; i++) {
+      if (i > 0) {
+        rows.add(
+          const Divider(height: 1, thickness: 1, color: AppColors.outline),
+        );
+      }
+      rows.add(_BestsellerRow(book: books[i]));
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.lgRadius,
+        border: Border.all(color: AppColors.outline),
+      ),
+      child: ClipRRect(
+        borderRadius: AppRadius.lgRadius,
+        child: Column(children: rows),
+      ),
+    );
+  }
+}
+
+/// 베스트셀러 한 행: 순위 + 표지 + 제목/저자.
+class _BestsellerRow extends StatelessWidget {
+  const _BestsellerRow({required this.book});
+
+  final BestsellerBook book;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        // TODO: TR-003 베스트셀러 책 상세 라우팅 연결(TR-C).
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // 순위 숫자.
+            SizedBox(
+              width: 24,
+              child: Text(
+                '${book.rank}',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.title.copyWith(color: AppColors.primary),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            BookCover(url: book.coverUrl, width: 40, height: 56, iconSize: 20),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    book.title,
+                    style: AppTextStyles.bodyStrong,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (book.author.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      book.author,
+                      style: AppTextStyles.caption,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 베스트셀러 로딩 박스. 높이를 고정해 레이아웃이 흔들리지 않게 한다.
+class _BestsellerLoadingBox extends StatelessWidget {
+  const _BestsellerLoadingBox();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 160,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.lgRadius,
+        border: Border.all(color: AppColors.outline),
+      ),
+      child: const Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+/// 베스트셀러 빈/에러 안내 박스. [onRetry] 가 있으면 다시 시도 버튼을 보인다.
+class _BestsellerMessageBox extends StatelessWidget {
+  const _BestsellerMessageBox({required this.message, this.onRetry});
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.lgRadius,
+        border: Border.all(color: AppColors.outline),
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.menu_book_rounded,
+            size: 32,
+            color: AppColors.textSecondary,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.caption,
+          ),
+          if (onRetry != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            OutlinedButton(
+              onPressed: onRetry,
+              child: const Text('다시 시도'),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
