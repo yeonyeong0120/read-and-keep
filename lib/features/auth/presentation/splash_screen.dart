@@ -15,6 +15,10 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 중앙 책 그림 너비: 화면 폭의 50%(좌우 여백이 적당히 남는 선). 정사각 이미지라 너비만 잡고
+    // 높이는 BoxFit.contain 으로 비율을 유지한다.
+    final logoWidth = MediaQuery.of(context).size.width * 0.5;
+
     return Scaffold(
       body: Stack(
         children: [
@@ -33,9 +37,8 @@ class SplashScreen extends StatelessWidget {
                 children: [
                   // 앱 이름 위 중앙 책 그림. 비율 유지를 위해 contain 사용.
                   Image.asset(
-                    'assets/images/book_pixel.png',
-                    width: 96,
-                    height: 96,
+                    'assets/images/book_pixel_chocolate.png',
+                    width: logoWidth,
                     fit: BoxFit.contain,
                   ),
                   const SizedBox(height: AppSpacing.lg),
