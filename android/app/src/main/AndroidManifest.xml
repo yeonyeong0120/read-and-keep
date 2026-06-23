@@ -10,7 +10,7 @@
         android:maxSdkVersion="32" />
 
     <application
-        android:label="read_and_keep"
+        android:label="@string/app_name"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
