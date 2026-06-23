@@ -103,6 +103,7 @@ dev_dependencies:
 
   # === 네이티브 런치 스크린 생성 ===
   flutter_native_splash: ^2.4.8
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -132,11 +133,24 @@ flutter:
 # 엔진 로딩 동안 뜨는 안드로이드 기본 흰 화면 + 플러터 로고를 우리 스플래시 톤(베이지)으로 교체한다.
 # color 는 AppColors.background(#FAF6F0)와 동일하게 맞춰 "네이티브 런치 → CM-001 스플래시 → 홈"이
 # 색 끊김 없이 이어지게 한다.
-# 중앙 로고는 별도 PNG 가 아직 없어(현재 스플래시는 Material 아이콘 사용) 이번엔 color 만 적용한다.
-# 아이콘 PNG 작업 시 image / android_12.image 에 경로를 채운다. iOS 는 프로젝트 제외 대상.
+# 중앙 image 는 정사각 book_icon_square.png(베이지 배경 + 브라운 책 아이콘)를 사용한다.
+# iOS 는 프로젝트 제외 대상.
 flutter_native_splash:
   color: "#FAF6F0"
+  image: assets/images/book_icon_square.png
   android_12:
     color: "#FAF6F0"
+    image: assets/images/book_icon_square.png
   android: true
   ios: false
+
+# === 앱 런처 아이콘(flutter_launcher_icons) 설정 ===
+# 홈 화면 앱 아이콘을 정사각 book_icon_square.png 로 교체한다.
+# 적응형 아이콘 배경은 베이지(#FAF6F0)로 맞춰 아이콘 배경과 자연스럽게 이어지게 한다.
+# iOS 는 프로젝트 제외 대상.
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/book_icon_square.png"
+  adaptive_icon_background: "#FAF6F0"
+  adaptive_icon_foreground: "assets/images/book_icon_square.png"
