@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 
@@ -16,6 +15,10 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 중앙 책 그림 너비: 화면 폭의 50%(좌우 여백이 적당히 남는 선). 정사각 이미지라 너비만 잡고
+    // 높이는 BoxFit.contain 으로 비율을 유지한다.
+    final logoWidth = MediaQuery.of(context).size.width * 0.5;
+
     return Scaffold(
       body: Stack(
         children: [
@@ -26,21 +29,22 @@ class SplashScreen extends StatelessWidget {
               fit: BoxFit.cover,
             ),
           ),
-          // 브랜드 영역: 펼친 책 아이콘 + 서비스명 + 서브카피를 중앙 배치.
-          const SafeArea(
+          // 브랜드 영역: 책 그림 + 서비스명 + 서브카피를 중앙 배치.
+          SafeArea(
             child: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.menu_book_rounded,
-                    size: 72,
-                    color: AppColors.primary,
+                  // 앱 이름 위 중앙 책 그림. 비율 유지를 위해 contain 사용.
+                  Image.asset(
+                    'assets/images/book_pixel_chocolate.png',
+                    width: logoWidth,
+                    fit: BoxFit.contain,
                   ),
-                  SizedBox(height: AppSpacing.lg),
-                  Text('읽다남김', style: AppTextStyles.displayLarge),
-                  SizedBox(height: AppSpacing.sm),
-                  Text(
+                  const SizedBox(height: AppSpacing.lg),
+                  const Text('읽다남김', style: AppTextStyles.displayLarge),
+                  const SizedBox(height: AppSpacing.sm),
+                  const Text(
                     '문장을 기록하고,\n취향을 발견하는 독서 경험',
                     style: AppTextStyles.caption,
                     textAlign: TextAlign.center,
