@@ -1,12 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../data/models/public_capture.dart';
+import '../domain/bestseller_providers.dart';
 import 'public_capture_detail_screen.dart';
 
 enum TrendSortType {
@@ -105,6 +107,8 @@ class _TrendScreenState extends State<TrendScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('트렌드'),
+        // TODO: TR-B 에서 제거. 알라딘 베스트셀러 호출 확인용 임시 버튼.
+        actions: const [_BestsellerTestButton()],
       ),
       body: StreamBuilder<List<PublicCapture>>(
         stream: _publicCapturesStream(),
@@ -705,6 +709,61 @@ class _TrendErrorView extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// TODO: TR-B 에서 제거.
+///
+/// 알라딘 베스트셀러 호출이 실기기에서 되는지 확인하기 위한 임시 버튼이다.
+/// 누르면 [bestsellersProvider] 를 읽어 상위 3권의 순위/제목을 스낵바와
+/// 디버그 로그로 보여준다. 팀원의 공개 구절 피드 본체는 건드리지 않는다.
+class _BestsellerTestButton extends ConsumerWidget {
+  const _BestsellerTestButton();
+
+  Future<void> _runTest(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('베스트셀러 불러오는 중...')),
+    );
+
+    try {
+      final books = await ref.read(bestsellersProvider().future);
+
+      // 디버그 콘솔에 전체 목록을 남긴다.
+      for (final book in books) {
+        debugPrint('[베스트셀러] ${book.rank}위 · ${book.title} · ${book.author}');
+      }
+
+      final preview = books
+          .take(3)
+          .map((book) => '${book.rank}위 ${book.title}')
+          .join('\n');
+
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              books.isEmpty ? '베스트셀러 결과가 비어 있어요' : '총 ${books.length}권\n$preview',
+            ),
+          ),
+        );
+    } catch (error) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('베스트셀러 호출 실패: $error')),
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return IconButton(
+      icon: const Icon(Icons.science_outlined),
+      tooltip: '베스트셀러 불러오기 테스트',
+      onPressed: () => _runTest(context, ref),
     );
   }
 }
