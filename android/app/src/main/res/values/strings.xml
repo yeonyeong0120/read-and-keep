@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 홈 화면 앱 아이콘 밑에 표시되는 앱 이름(라벨). 패키지명/applicationId 와는 무관한 표시용 문자열. -->
+    <string name="app_name">읽다남김</string>
+</resources>
