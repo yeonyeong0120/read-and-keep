@@ -72,6 +72,14 @@ abstract final class AppRoutes {
   /// 트렌드 탭 (TR).
   static const String trend = '/trend';
 
+  /// 기간별 베스트셀러 (TR-002). 트렌드 브랜치 하위(탭바 유지).
+  /// 실제 GoRoute path 는 '/trend/bestseller-period'. extra 없음.
+  static const String bestsellerPeriod = '/trend/bestseller-period';
+
+  /// 트렌드 책 상세 (TR-003). 트렌드 브랜치 하위(탭바 유지).
+  /// 실제 GoRoute path 는 '/trend/trend-detail'. extra 로 [BestsellerBook] 를 넘긴다.
+  static const String trendDetail = '/trend/trend-detail';
+
   // --- 마이페이지 (MY) ---
 
   /// 마이페이지 허브 (MY-001). 홈 브랜치 하위(탭바 유지).
