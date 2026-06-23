@@ -2,7 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -12,6 +14,7 @@ import '../data/models/bestseller_book.dart';
 import '../data/models/public_capture.dart';
 import '../domain/bestseller_providers.dart';
 import 'public_capture_detail_screen.dart';
+import 'widgets/aladin_source_note.dart';
 
 enum TrendSortType {
   latest,
@@ -749,12 +752,10 @@ class _BestsellerSection extends ConsumerWidget {
             const Expanded(
               child: Text('주간 베스트셀러 TOP 5', style: AppTextStyles.title),
             ),
-            // 전체보기(TR-002 기간별 베스트셀러). 라우팅은 TR-C 에서 연결한다.
+            // 전체보기(TR-002 기간별 베스트셀러)로 이동.
             InkWell(
               borderRadius: AppRadius.smRadius,
-              onTap: () {
-                // TODO: TR-002 기간별 베스트셀러 라우팅 연결.
-              },
+              onTap: () => context.push(AppRoutes.bestsellerPeriod),
               child: const Padding(
                 padding: EdgeInsets.symmetric(
                   horizontal: AppSpacing.xs,
@@ -794,6 +795,9 @@ class _BestsellerSection extends ConsumerWidget {
                 ref.invalidate(bestsellersProvider(maxResults: _topCount)),
           ),
         ),
+        const SizedBox(height: AppSpacing.sm),
+        // 알라딘 도서 DB 출처 표기(약관 의무).
+        const AladinSourceNote(),
       ],
     );
   }
@@ -840,9 +844,8 @@ class _BestsellerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {
-        // TODO: TR-003 베스트셀러 책 상세 라우팅 연결(TR-C).
-      },
+      // 베스트셀러 카드 탭 → TR-003 트렌드 상세(BestsellerBook 전달).
+      onTap: () => context.push(AppRoutes.trendDetail, extra: book),
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.lg,

@@ -12,6 +12,7 @@ class BestsellerBook {
     required this.coverUrl,
     required this.description,
     this.pubDate,
+    this.link = '',
   });
 
   /// 베스트셀러 순위(알라딘 bestRank). 누락 시 0.
@@ -38,6 +39,21 @@ class BestsellerBook {
   /// 출간일 문자열(알라딘 pubDate, 예: "2024-01-01"). 누락 가능.
   final String? pubDate;
 
+  /// 알라딘 상품 페이지 링크(약관상 출처 링크). 누락 시 빈 문자열.
+  final String link;
+
+  /// 알라딘 상품 페이지 URL.
+  ///
+  /// 응답의 [link] 가 있으면 그대로 쓰고, 없으면 isbn13 기반 상품 URL 을 만든다.
+  /// 둘 다 없으면 빈 문자열을 반환한다(호출 측에서 링크 노출 여부 판단).
+  String get aladinProductUrl {
+    if (link.isNotEmpty) return link;
+    if (isbn13.isNotEmpty) {
+      return 'https://www.aladin.co.kr/shop/wproduct.aspx?ISBN=$isbn13';
+    }
+    return '';
+  }
+
   /// 알라딘 응답 item 한 건(JSON Map)을 [BestsellerBook] 으로 변환한다.
   ///
   /// 모든 필드는 누락에 안전한 기본값을 둔다. 숫자 필드(bestRank)는 int 또는
@@ -52,6 +68,7 @@ class BestsellerBook {
       coverUrl: (json['cover'] as String?)?.trim() ?? '',
       description: (json['description'] as String?)?.trim() ?? '',
       pubDate: (json['pubDate'] as String?)?.trim(),
+      link: (json['link'] as String?)?.trim() ?? '',
     );
   }
 

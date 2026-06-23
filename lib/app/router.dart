@@ -30,8 +30,11 @@ import '../features/recommendation/data/models/recommendation_cache.dart';
 import '../features/recommendation/presentation/recommend_criteria_screen.dart';
 import '../features/recommendation/presentation/recommend_detail_screen.dart';
 import '../features/recommendation/presentation/recommend_screen.dart';
+import '../features/trend/data/models/bestseller_book.dart';
 import '../features/trend/data/models/public_capture.dart';
+import '../features/trend/presentation/bestseller_period_screen.dart';
 import '../features/trend/presentation/public_capture_detail_screen.dart';
+import '../features/trend/presentation/trend_detail_screen.dart';
 import '../features/trend/presentation/trend_screen.dart';
 import 'routes.dart';
 import 'widgets/main_shell.dart';
@@ -195,7 +198,7 @@ GoRouter router(Ref ref) {
               GoRoute(
                 path: AppRoutes.trend,
                 builder: (context, state) => const TrendScreen(),
-                // 공개 구절 상세는 트렌드 브랜치 하위에 두어 탭바를 유지한다.
+                // 공개 구절 상세/베스트셀러 화면은 트렌드 브랜치 하위에 두어 탭바를 유지한다.
                 routes: [
                   GoRoute(
                     path: 'public-capture-detail',
@@ -203,6 +206,20 @@ GoRouter router(Ref ref) {
                       final capture = state.extra! as PublicCapture;
 
                       return PublicCaptureDetailScreen(capture: capture);
+                    },
+                  ),
+                  // TR-002 기간별 베스트셀러.
+                  GoRoute(
+                    path: 'bestseller-period',
+                    builder: (context, state) => const BestsellerPeriodScreen(),
+                  ),
+                  // TR-003 트렌드 책 상세. extra 로 BestsellerBook 을 받는다.
+                  GoRoute(
+                    path: 'trend-detail',
+                    builder: (context, state) {
+                      final book = state.extra! as BestsellerBook;
+
+                      return TrendDetailScreen(book: book);
                     },
                   ),
                 ],
