@@ -40,6 +40,7 @@ class BookDetailScreen extends ConsumerWidget {
           title: const Text('이 책을 삭제할까요?'),
           content: Text(
             '"${book.title}" 책과 이 책에 저장된 구절이 함께 삭제됩니다.\n\n'
+            '공개된 구절, 트렌드 댓글, 좋아요, 조회 기록도 함께 삭제됩니다.\n\n'
             '삭제 후에는 되돌릴 수 없어요.',
           ),
           actions: [
@@ -84,7 +85,19 @@ class BookDetailScreen extends ConsumerWidget {
           .collection('books')
           .doc(book.bookId);
 
-      await _deleteBookCaptures(bookRef);
+      // 1. bookId 기준으로 트렌드 공개 피드 복제본 먼저 삭제
+      await _deletePublicCapturesByBook(
+        userId: user.uid,
+        bookId: book.bookId,
+      );
+
+      // 2. 개인 captures를 읽으면서 captureId 기준으로 공개 피드 한 번 더 삭제
+      await _deleteBookCaptures(
+        bookRef,
+        userId: user.uid,
+      );
+
+      // 3. 마지막으로 책 문서 삭제
       await bookRef.delete();
 
       ref.invalidate(booksProvider());
@@ -98,6 +111,18 @@ class BookDetailScreen extends ConsumerWidget {
       );
 
       Navigator.of(context).pop();
+    } on FirebaseException catch (e) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.code == 'permission-denied'
+                ? '책 삭제 중 권한 오류가 발생했어요. Firestore Rules 배포 여부와 publicCaptures 하위 컬렉션 삭제 권한을 확인해주세요.'
+                : '책 삭제 중 Firebase 오류가 발생했어요: ${e.message ?? e.code}',
+          ),
+        ),
+      );
     } catch (e) {
       if (!context.mounted) return;
 
@@ -108,8 +133,9 @@ class BookDetailScreen extends ConsumerWidget {
   }
 
   Future<void> _deleteBookCaptures(
-    DocumentReference<Map<String, dynamic>> bookRef,
-  ) async {
+    DocumentReference<Map<String, dynamic>> bookRef, {
+    required String userId,
+  }) async {
     const int batchSize = 300;
 
     while (true) {
@@ -122,6 +148,24 @@ class BookDetailScreen extends ConsumerWidget {
 
       for (final captureDoc in capturesSnapshot.docs) {
         await _deleteCaptureComments(captureDoc.reference);
+
+        await _deletePublicCaptureTree(
+          userId: userId,
+          captureId: captureDoc.id,
+        );
+
+        // 예전 데이터 대비: 개인 capture 문서 안에 captureId 필드가 따로 있는 경우
+        final captureData = captureDoc.data();
+        final fieldCaptureId = captureData['captureId'];
+
+        if (fieldCaptureId is String &&
+            fieldCaptureId.trim().isNotEmpty &&
+            fieldCaptureId != captureDoc.id) {
+          await _deletePublicCaptureTree(
+            userId: userId,
+            captureId: fieldCaptureId,
+          );
+        }
       }
 
       final batch = FirebaseFirestore.instance.batch();
@@ -141,25 +185,124 @@ class BookDetailScreen extends ConsumerWidget {
   Future<void> _deleteCaptureComments(
     DocumentReference<Map<String, dynamic>> captureRef,
   ) async {
+    await _deleteCollection(captureRef.collection('comments'));
+  }
+
+  Future<void> _deletePublicCapturesByBook({
+    required String userId,
+    required String bookId,
+  }) async {
+    final firestore = FirebaseFirestore.instance;
     const int batchSize = 300;
 
     while (true) {
-      final commentsSnapshot =
-          await captureRef.collection('comments').limit(batchSize).get();
+      final snapshot = await firestore
+          .collection('publicCaptures')
+          .where('userId', isEqualTo: userId)
+          .where('bookId', isEqualTo: bookId)
+          .limit(batchSize)
+          .get();
 
-      if (commentsSnapshot.docs.isEmpty) {
+      if (snapshot.docs.isEmpty) {
+        break;
+      }
+
+      for (final doc in snapshot.docs) {
+        await _deletePublicCaptureDocument(
+          publicCaptureRef: doc.reference,
+          userId: userId,
+        );
+      }
+
+      if (snapshot.docs.length < batchSize) {
+        break;
+      }
+    }
+  }
+
+  Future<void> _deletePublicCaptureTree({
+    required String userId,
+    required String captureId,
+  }) async {
+    final firestore = FirebaseFirestore.instance;
+
+    // 1. 현재 구조: publicCaptures/{captureId}
+    final exactRef = firestore.collection('publicCaptures').doc(captureId);
+    final exactSnapshot = await exactRef.get();
+
+    if (exactSnapshot.exists) {
+      final data = exactSnapshot.data();
+
+      if (data != null && data['userId'] == userId) {
+        await _deletePublicCaptureDocument(
+          publicCaptureRef: exactRef,
+          userId: userId,
+        );
+      }
+    }
+
+    // 2. 예전 구조 대비: 문서 ID는 다르지만 captureId 필드로 연결된 경우
+    final matchedSnapshot = await firestore
+        .collection('publicCaptures')
+        .where('captureId', isEqualTo: captureId)
+        .get();
+
+    for (final doc in matchedSnapshot.docs) {
+      final data = doc.data();
+
+      if (data['userId'] == userId) {
+        await _deletePublicCaptureDocument(
+          publicCaptureRef: doc.reference,
+          userId: userId,
+        );
+      }
+    }
+  }
+
+  Future<void> _deletePublicCaptureDocument({
+    required DocumentReference<Map<String, dynamic>> publicCaptureRef,
+    required String userId,
+  }) async {
+    final snapshot = await publicCaptureRef.get();
+
+    if (!snapshot.exists) {
+      return;
+    }
+
+    final data = snapshot.data();
+
+    if (data == null || data['userId'] != userId) {
+      return;
+    }
+
+    await _deleteCollection(publicCaptureRef.collection('comments'));
+    await _deleteCollection(publicCaptureRef.collection('likes'));
+    await _deleteCollection(publicCaptureRef.collection('views'));
+
+    await publicCaptureRef.delete();
+  }
+
+  Future<void> _deleteCollection(
+    CollectionReference<Map<String, dynamic>> collectionRef,
+  ) async {
+    const int batchSize = 300;
+
+    while (true) {
+      final snapshot = await collectionRef.limit(batchSize).get();
+
+      if (snapshot.docs.isEmpty) {
         break;
       }
 
       final batch = FirebaseFirestore.instance.batch();
 
-      for (final commentDoc in commentsSnapshot.docs) {
-        batch.delete(commentDoc.reference);
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
       }
 
       await batch.commit();
 
-      if (commentsSnapshot.docs.length < batchSize) {
+      if (snapshot.docs.length < batchSize) {
         break;
       }
     }

@@ -107,28 +107,53 @@ class _GalleryOcrScreenState extends State<GalleryOcrScreen> {
     }
   }
 
-  List<String> _extractCandidates(RecognizedText recognizedText) {
-    final result = <String>[];
 
-    // 1단계: OCR 줄 단위 후보 추출
-    for (final block in recognizedText.blocks) {
-      for (final line in block.lines) {
+  List<String> _extractCandidates(RecognizedText recognizedText) {
+    final orderedLines = <String>[];
+
+    final blocks = recognizedText.blocks.toList()
+      ..sort((a, b) {
+        final topCompare = a.boundingBox.top.compareTo(b.boundingBox.top);
+        if (topCompare != 0) return topCompare;
+        return a.boundingBox.left.compareTo(b.boundingBox.left);
+      });
+
+    for (final block in blocks) {
+      final lines = block.lines.toList()
+        ..sort((a, b) {
+          final topCompare = a.boundingBox.top.compareTo(b.boundingBox.top);
+          if (topCompare != 0) return topCompare;
+          return a.boundingBox.left.compareTo(b.boundingBox.left);
+        });
+
+      for (final line in lines) {
         final text = _cleanText(line.text);
 
-        if (_isValidCandidate(text)) {
-          _addUnique(result, text);
+        if (_isNoiseText(text)) {
+          continue;
         }
+
+        orderedLines.add(text);
       }
     }
 
-    // 2단계: 너무 짧은 후보가 많으면 긴 문장 위주로 정렬
-    result.sort((a, b) {
-      final aScore = _candidateScore(a);
-      final bScore = _candidateScore(b);
-      return bScore.compareTo(aScore);
-    });
+    if (orderedLines.isEmpty) {
+      return const [];
+    }
 
-    // 3단계: 최대 15개까지만 보여줌
+    final mergedText = _mergeLinesToText(orderedLines);
+    final sentences = _splitIntoSentences(mergedText);
+
+    final result = <String>[];
+
+    for (final sentence in sentences) {
+      final cleaned = _cleanText(sentence);
+
+      if (_isValidCandidate(cleaned)) {
+        _addUnique(result, cleaned);
+      }
+    }
+
     return result.take(15).toList();
   }
 
@@ -146,33 +171,59 @@ class _GalleryOcrScreenState extends State<GalleryOcrScreen> {
         .replaceAll('」', '')
         .replaceAll('『', '')
         .replaceAll('』', '')
+        .replaceAll('（', '(')
+        .replaceAll('）', ')')
         .trim();
+  }
+
+  bool _isNoiseText(String text) {
+    final cleaned = text.trim();
+
+    if (cleaned.isEmpty) return true;
+    if (cleaned.length <= 1) return true;
+
+    final lowerText = cleaned.toLowerCase();
+
+    if (lowerText.contains('isbn')) return true;
+    if (lowerText.contains('http')) return true;
+    if (lowerText.contains('www.')) return true;
+    if (lowerText.contains('copyright')) return true;
+    if (cleaned.contains('출판')) return true;
+    if (cleaned.contains('펴낸')) return true;
+    if (cleaned.contains('지은이')) return true;
+    if (cleaned.contains('옮긴이')) return true;
+    if (cleaned.contains('차례')) return true;
+    if (cleaned.contains('목차')) return true;
+
+    if (RegExp(r'^\d{1,4}$').hasMatch(cleaned)) return true;
+    if (RegExp(r'^-?\s*\d{1,4}\s*-?$').hasMatch(cleaned)) return true;
+
+    final digitCount = RegExp(r'[0-9]').allMatches(cleaned).length;
+    if (digitCount >= cleaned.length * 0.35) return true;
+
+    final symbolCount =
+        RegExp(r'[^가-힣a-zA-Z0-9\s.,!?…()\-]').allMatches(cleaned).length;
+    if (symbolCount >= cleaned.length * 0.45) return true;
+
+    return false;
   }
 
   bool _isValidCandidate(String text) {
     if (text.isEmpty) return false;
-
-    // 너무 짧은 글 제거
     if (text.length < 8) return false;
 
     final koreanCount = RegExp(r'[가-힣]').allMatches(text).length;
     final englishCount = RegExp(r'[a-zA-Z]').allMatches(text).length;
     final digitCount = RegExp(r'[0-9]').allMatches(text).length;
     final symbolCount =
-        RegExp(r'[^가-힣a-zA-Z0-9\s]').allMatches(text).length;
+        RegExp(r'[^가-힣a-zA-Z0-9\s.,!?…()\-]').allMatches(text).length;
 
-    // 한글/영문이 너무 적으면 제거
     if (koreanCount + englishCount < 6) return false;
-
-    // 숫자가 많은 경우 제거
-    if (digitCount >= text.length * 0.25) return false;
-
-    // 특수문자가 많은 경우 제거
-    if (symbolCount >= text.length * 0.4) return false;
+    if (digitCount >= text.length * 0.30) return false;
+    if (symbolCount >= text.length * 0.45) return false;
 
     final lowerText = text.toLowerCase();
 
-    // 책 정보/URL/잡텍스트 제거
     if (lowerText.contains('isbn')) return false;
     if (lowerText.contains('http')) return false;
     if (lowerText.contains('www.')) return false;
@@ -182,52 +233,141 @@ class _GalleryOcrScreenState extends State<GalleryOcrScreen> {
     if (lowerText.contains('지은이')) return false;
     if (lowerText.contains('옮긴이')) return false;
 
-    // 페이지 번호 제거
     if (RegExp(r'^\d{1,4}$').hasMatch(text)) return false;
     if (RegExp(r'^-?\s*\d{1,4}\s*-?$').hasMatch(text)) return false;
 
-    // 한 단어 느낌의 짧은 조각 제거
     if (!text.contains(' ') && text.length < 12) return false;
 
     return true;
   }
 
-  int _candidateScore(String text) {
-    var score = 0;
+  String _mergeLinesToText(List<String> lines) {
+    final buffer = StringBuffer();
 
-    final koreanCount = RegExp(r'[가-힣]').allMatches(text).length;
-    final englishCount = RegExp(r'[a-zA-Z]').allMatches(text).length;
-    final digitCount = RegExp(r'[0-9]').allMatches(text).length;
-    final symbolCount =
-        RegExp(r'[^가-힣a-zA-Z0-9\s]').allMatches(text).length;
+    for (final line in lines) {
+      final text = line.trim();
+      if (text.isEmpty) continue;
 
-    score += koreanCount * 4;
-    score += englishCount * 2;
-    score += text.length;
+      if (buffer.isEmpty) {
+        buffer.write(text);
+        continue;
+      }
 
-    score -= digitCount * 5;
-    score -= symbolCount * 2;
+      final previous = buffer.toString().trimRight();
 
-    if (text.length >= 15) score += 10;
-    if (text.length >= 25) score += 15;
-
-    if (text.endsWith('다') ||
-        text.endsWith('요') ||
-        text.endsWith('네') ||
-        text.endsWith('죠') ||
-        text.endsWith('까') ||
-        text.endsWith('.') ||
-        text.endsWith('!') ||
-        text.endsWith('?')) {
-      score += 20;
+      if (_looksLikeSentenceEnd(previous)) {
+        buffer.write('\n$text');
+      } else {
+        buffer.write(' $text');
+      }
     }
 
-    // 너무 길게 붙은 OCR 덩어리는 감점
-    if (text.length > 100) {
-      score -= 40;
+    return buffer.toString();
+  }
+
+  bool _looksLikeSentenceEnd(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return false;
+
+    if (RegExp(r'[.!?。！？…]$').hasMatch(trimmed)) {
+      return true;
     }
 
-    return score;
+    final koreanEndings = [
+      '습니다',
+      '입니다',
+      '였다',
+      '이었다',
+      '했다',
+      '하였다',
+      '된다',
+      '한다',
+      '있다',
+      '없다',
+      '였다',
+      '었다',
+      '다',
+      '요',
+      '죠',
+      '까',
+      '네',
+      '군요',
+      '구나',
+    ];
+
+    for (final ending in koreanEndings) {
+      if (trimmed.endsWith(ending)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  bool _isSentenceBoundary(String text, int index, String current) {
+    final char = text[index];
+
+    if (RegExp(r'[.!?。！？…]').hasMatch(char)) {
+      return true;
+    }
+
+    final nextChar = index + 1 < text.length ? text[index + 1] : '';
+
+    // 한국어 종결어미는 단어/문장 끝에서만 자른다.
+    // 다음 글자가 바로 이어지는 한글이면 중간 단어일 가능성이 있어서 자르지 않는다.
+    if (nextChar.isNotEmpty && nextChar != ' ') {
+      return false;
+    }
+
+    return _looksLikeSentenceEnd(current);
+  }
+
+  List<String> _splitIntoSentences(String text) {
+    final normalized = text
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll(' .', '.')
+        .replaceAll(' ?', '?')
+        .replaceAll(' !', '!')
+        .trim();
+
+    if (normalized.isEmpty) {
+      return const [];
+    }
+
+    final result = <String>[];
+    final buffer = StringBuffer();
+
+    for (var i = 0; i < normalized.length; i++) {
+      final char = normalized[i];
+      buffer.write(char);
+
+      final current = buffer.toString().trim();
+
+      if (current.length >= 12 && _isSentenceBoundary(normalized, i, current)) {
+        result.add(current);
+        buffer.clear();
+
+        // 문장 뒤 공백은 다음 문장 시작 전 제거
+        while (i + 1 < normalized.length && normalized[i + 1] == ' ') {
+          i++;
+        }
+      }
+    }
+
+    final remain = buffer.toString().trim();
+
+    if (remain.isNotEmpty) {
+      if (result.isNotEmpty &&
+          remain.length < 8 &&
+          !_looksLikeSentenceEnd(remain)) {
+        final last = result.removeLast();
+        result.add('$last $remain'.trim());
+      } else {
+        result.add(remain);
+      }
+    }
+
+    return result;
   }
 
   void _addUnique(List<String> result, String text) {
