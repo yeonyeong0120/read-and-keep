@@ -67,9 +67,8 @@ class CaptureRepository {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => Capture.fromFirestore(doc))
-              .toList(),
+          (snapshot) =>
+              snapshot.docs.map((doc) => Capture.fromFirestore(doc)).toList(),
         );
   }
 
@@ -149,8 +148,8 @@ class CaptureRepository {
   ///
   /// 핵심:
   /// - 비공개 → 공개 전환이면 publicCaptures 새 문서 생성
-  /// - 이미 공개된 구절 수정이면 기존 likeCount/commentCount는 유지
-  /// - 공개 → 비공개 전환이면 publicCaptures 삭제
+  /// - 이미 공개된 구절 수정이면 기존 likeCount/commentCount/viewCount는 유지
+  /// - 공개 → 비공개 전환이면 publicCaptures 및 하위 댓글/좋아요/조회 기록 삭제
   Future<void> updateCapture({
     required Capture capture,
     required String quote,
@@ -165,11 +164,17 @@ class CaptureRepository {
       bookId: capture.bookId,
     ).doc(capture.id);
 
-    final publicRef = _publicCaptureRef(captureId: capture.id);
+    final beforeHadComment = capture.comment.trim().isNotEmpty;
+    final afterHasComment = comment.trim().isNotEmpty;
 
-    // 중요:
-    // publicCaptures 문서가 이미 있는지 확인해서
-    // 새 생성 / 기존 수정 로직을 분리한다.
+    int commentCountDelta = 0;
+    if (!beforeHadComment && afterHasComment) {
+      commentCountDelta = 1;
+    } else if (beforeHadComment && !afterHasComment) {
+      commentCountDelta = -1;
+    }
+
+    final publicRef = _publicCaptureRef(captureId: capture.id);
     final publicSnapshot = await publicRef.get();
     final publicExists = publicSnapshot.exists;
 
@@ -185,8 +190,6 @@ class CaptureRepository {
 
     if (isPublic) {
       if (publicExists) {
-        // 이미 공개된 구절 수정:
-        // 좋아요 수와 댓글 수는 건드리지 않는다.
         batch.set(
           publicRef,
           _publicCaptureDataOnExistingUpdate(
@@ -199,8 +202,6 @@ class CaptureRepository {
           SetOptions(merge: true),
         );
       } else {
-        // 비공개였던 구절을 공개로 전환:
-        // publicCaptures 문서를 새로 만든다.
         batch.set(
           publicRef,
           _publicCaptureDataOnCreate(
@@ -216,23 +217,30 @@ class CaptureRepository {
           ),
         );
       }
-    } else {
-      // 공개였던 구절을 비공개로 전환:
-      // 공개 피드에서 제거한다.
-      if (publicExists) {
-        batch.delete(publicRef);
-      }
+    }
+
+    final bookUpdateData = <String, dynamic>{
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    if (commentCountDelta != 0) {
+      bookUpdateData['commentCount'] = FieldValue.increment(commentCountDelta);
     }
 
     batch.set(
       _bookRef(userId: userId, bookId: capture.bookId),
-      {
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
+      bookUpdateData,
       SetOptions(merge: true),
     );
 
     await batch.commit();
+
+    if (!isPublic) {
+      await _deletePublicCaptureTree(
+        userId: userId,
+        captureId: capture.id,
+      );
+    }
   }
 
   /// 저장한 구절 삭제.
@@ -248,15 +256,35 @@ class CaptureRepository {
       bookId: bookId,
     ).doc(captureId);
 
+    final captureSnapshot = await captureRef.get();
+
+    if (!captureSnapshot.exists) {
+      return;
+    }
+
+    final captureData = captureSnapshot.data();
+    final isPublic = captureData?['isPublic'] == true;
+
     await _deleteCaptureComments(captureRef);
+
+    // 공개 구절이면 당연히 삭제.
+    // 비공개여도 예전에 남은 publicCaptures 찌꺼기가 있을 수 있으므로
+    // 안전하게 get + userId 확인 후 삭제한다.
+    if (isPublic) {
+      await _deletePublicCaptureTree(
+        userId: userId,
+        captureId: captureId,
+      );
+    } else {
+      await _deletePublicCaptureTree(
+        userId: userId,
+        captureId: captureId,
+      );
+    }
 
     final batch = _firestore.batch();
 
     batch.delete(captureRef);
-
-    batch.delete(
-      _publicCaptureRef(captureId: captureId),
-    );
 
     batch.set(
       _bookRef(userId: userId, bookId: bookId),
@@ -275,25 +303,90 @@ class CaptureRepository {
   Future<void> _deleteCaptureComments(
     DocumentReference<Map<String, dynamic>> captureRef,
   ) async {
+    await _deleteCollection(captureRef.collection('comments'));
+  }
+
+  Future<void> _deletePublicCaptureTree({
+    required String userId,
+    required String captureId,
+  }) async {
+    final exactRef = _publicCaptureRef(captureId: captureId);
+    final exactSnapshot = await exactRef.get();
+
+    // 1. 현재 구조: publicCaptures/{captureId}
+    if (exactSnapshot.exists) {
+      final data = exactSnapshot.data();
+
+      if (data != null && data['userId'] == userId) {
+        await _deletePublicCaptureDocument(
+          publicCaptureRef: exactRef,
+          userId: userId,
+        );
+      }
+    }
+
+    // 2. 예전 구조 대비: 문서 ID는 다르지만 captureId 필드로 연결된 경우
+    final matchedSnapshot = await _firestore
+        .collection('publicCaptures')
+        .where('captureId', isEqualTo: captureId)
+        .get();
+
+    for (final doc in matchedSnapshot.docs) {
+      final data = doc.data();
+
+      if (data['userId'] == userId) {
+        await _deletePublicCaptureDocument(
+          publicCaptureRef: doc.reference,
+          userId: userId,
+        );
+      }
+    }
+  }
+
+  Future<void> _deletePublicCaptureDocument({
+    required DocumentReference<Map<String, dynamic>> publicCaptureRef,
+    required String userId,
+  }) async {
+    final snapshot = await publicCaptureRef.get();
+
+    if (!snapshot.exists) {
+      return;
+    }
+
+    final data = snapshot.data();
+
+    if (data == null || data['userId'] != userId) {
+      return;
+    }
+
+    await _deleteCollection(publicCaptureRef.collection('comments'));
+    await _deleteCollection(publicCaptureRef.collection('likes'));
+    await _deleteCollection(publicCaptureRef.collection('views'));
+
+    await publicCaptureRef.delete();
+  }
+
+  Future<void> _deleteCollection(
+    CollectionReference<Map<String, dynamic>> collectionRef,
+  ) async {
     const int batchSize = 300;
 
     while (true) {
-      final commentsSnapshot =
-          await captureRef.collection('comments').limit(batchSize).get();
+      final snapshot = await collectionRef.limit(batchSize).get();
 
-      if (commentsSnapshot.docs.isEmpty) {
+      if (snapshot.docs.isEmpty) {
         break;
       }
 
       final batch = _firestore.batch();
 
-      for (final commentDoc in commentsSnapshot.docs) {
-        batch.delete(commentDoc.reference);
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
       }
 
       await batch.commit();
 
-      if (commentsSnapshot.docs.length < batchSize) {
+      if (snapshot.docs.length < batchSize) {
         break;
       }
     }
@@ -323,6 +416,7 @@ class CaptureRepository {
       'isPublic': true,
       'likeCount': 0,
       'commentCount': 0,
+      'viewCount': 0,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };

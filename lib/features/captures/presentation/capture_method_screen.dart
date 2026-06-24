@@ -43,6 +43,14 @@ class CaptureMethodScreen extends StatelessWidget {
     );
   }
 
+  /// 책 변경.
+  ///
+  /// 기존에는 context.pop()이라서 책 상세에서 진입한 경우 다시 책 상세로 돌아갔다.
+  /// 이제는 현재 문장 추가 방법 화면을 책 선택 화면으로 교체한다.
+  void _changeBook(BuildContext context) {
+    context.pushReplacement(AppRoutes.bookSelect);
+  }
+
   /// 갤러리 진입. OS 사진 권한 상태를 진짜 기준으로 삼는다.
   ///
   /// - 이미 허용(또는 제한 허용) → 안내 생략하고 바로 OCR 화면 진입.
@@ -228,6 +236,7 @@ class CaptureMethodScreen extends StatelessWidget {
               author: bookAuthor,
               publisher: bookPublisher,
               coverUrl: bookCoverUrl,
+              onChangeBook: () => _changeBook(context),
             ),
             const SizedBox(height: AppSpacing.xl),
             _MethodCard(
@@ -291,6 +300,7 @@ class _SelectedBookCard extends StatelessWidget {
     required this.title,
     required this.author,
     required this.publisher,
+    required this.onChangeBook,
     this.coverUrl,
   });
 
@@ -298,6 +308,7 @@ class _SelectedBookCard extends StatelessWidget {
   final String author;
   final String publisher;
   final String? coverUrl;
+  final VoidCallback onChangeBook;
 
   @override
   Widget build(BuildContext context) {
@@ -349,7 +360,7 @@ class _SelectedBookCard extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   OutlinedButton(
-                    onPressed: () => context.pop(),
+                    onPressed: onChangeBook,
                     child: const Text('책 변경'),
                   ),
                 ],
